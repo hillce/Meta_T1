@@ -112,20 +112,22 @@ norm = Normalise()
 trnsInTrain = transforms.Compose([toT,norm,rA])
 trnsInVal = transforms.Compose([toT,norm])
 
-datasetTrain = T1_Train_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
-datasetVal = T1_Val_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
-datasetTest = T1_Test_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTrain = T1_Train_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInTrain,load=load)
+datasetVal = T1_Val_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=100,transform=trnsInVal,load=load)
+datasetTest = T1_Test_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=100,transform=trnsInVal,load=load)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-netB = Braided_AutoEncoder(7,7,288,384)
+# device = torch.device("cpu")
+netB = Braided_AutoEncoder(7,7,288,384,device=device)
 netB = netB.to(device)
 
 loss1 = nn.SmoothL1Loss()
 loss2 = nn.MSELoss()
+loss3 = nn.MSELoss()
 
 optimB = optim.Adam(netB.parameters(),lr=lr,betas=(b1,0.999))
 
@@ -143,7 +145,8 @@ for nE in range(numEpochs):
     for i,data in enumerate(loaderTrain):
 
         inpData = data["Images"].to(device)
-        inpInvTime = data["InvTime"].to(device)
+        inpInvTime = data["InvTime"].type(torch.FloatTensor)
+        inpInvTime = inpInvTime.to(device)
         outGT = data["T1Map"].to(device)
 
         optimB.zero_grad()
@@ -152,26 +155,31 @@ for nE in range(numEpochs):
         outImg, outMeta = netB(inpData,inpInvTime)
         err1 = loss1(inpData,outImg)
         err2 = loss2(inpData,outImg)
-        err3 = loss1(inpInvTime,outMeta)
+        err3 = loss3(inpInvTime,outMeta)
 
         lossArr[nE,i,0] = i+nE*trainLen
         lossArr[nE,i,1] = err2.item() + err1.item() + err3.item()
         runningLoss += err2.item() + err1.item() + err3.item()
 
         err = err1 + err2 + err3
+
         err.backward()
         optimB.step()
+
+        # inpData = inpData.cpu().numpy()[0,0,:,:]
+        # plt.imshow(inpData)
+        # plt.show()
         
         if i % 500 == 0:
             outImg = outImg.detach().cpu().numpy()[0,0,:,:]
             inpData = inpData.cpu().numpy()[0,0,:,:]
 
             fig, ax = plt.subplots(1,3)
-            ax[0].imshow(outImg,vmax=200)
+            ax[0].imshow(outImg,vmax=1)
             ax[0].axis('off')
-            ax[1].imshow(inpData,vmax=200)
+            ax[1].imshow(inpData,vmax=1)
             ax[1].axis('off')
-            im = ax[2].imshow(abs(outImg-inpData),vmax=100,vmin=0,cmap="jet")
+            im = ax[2].imshow(abs(outImg-inpData),vmax=1,vmin=0,cmap="jet")
             fig.colorbar(im,ax=ax[2])
             ax[2].axis('off')
             plt.savefig("{}Epoch_{}_i_{}_img.png".format(figDir,nE+1,i+1))
@@ -206,16 +214,29 @@ for nE in range(numEpochs):
                 outImg = outImg.detach().cpu().numpy()[0,0,:,:]
                 inpData = inpData.cpu().numpy()[0,0,:,:]
 
+                outMeta = outMeta.detach().cpu().numpy()[0]
+                inpInvTime = inpInvTime.cpu().numpy()[0]
+                print(outMeta,inpInvTime)
+
                 fig, ax = plt.subplots(1,3)
-                ax[0].imshow(outImg,vmax=200)
+                ax[0].imshow(outImg,vmax=1)
                 ax[0].axis('off')
-                ax[1].imshow(inpData,vmax=200)
+                ax[1].imshow(inpData,vmax=1)
                 ax[1].axis('off')
-                im = ax[2].imshow(abs(outImg-inpData),vmax=100,vmin=0,cmap="jet")
+                im = ax[2].imshow(abs(outImg-inpData),vmax=1,vmin=0,cmap="jet")
                 fig.colorbar(im,ax=ax[2])
                 ax[2].axis('off')
                 plt.savefig("{}Epoch_{}_i_{}_img_val.png".format(figDir,nE+1,i+1))
+                
+
+                x = np.arange(1,8)
+                ax = plt.subplot(111)
+                ax.bar(x-0.2, outMeta, width=0.2, color='b', align='center')
+                ax.bar(x+0.2, inpInvTime, width=0.2, color='r', align='center')
+                plt.savefig("{}Epoch_{}_i_{}_InvTime_val.png".format(figDir,nE+1,i+1))
                 plt.close("all")
+
+
 
         valLoss = sum(valLoss)/valLen
         print("\n\tVal Loss: {}".format(valLoss))
