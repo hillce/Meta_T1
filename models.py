@@ -44,9 +44,51 @@ class Braided_AutoEncoder(nn.Module):
 
         return (img,meta)
 
+class Braided_UNet(nn.Module):
+    """
+    Generator network for recreating the missing image in the sequence of T1,T2,PDFF maps etc.
+    """
+
+    def __init__(self,nCImg,nCMeta,xDim=288,yDim=384,device=device):
+        super(Braided_UNet,self).__init__()
+        self.device = device
+        self.nCImg = nCImg
+        self.nCMeta = nCMeta
+
+        self.block1 = Braided_Block(self.nCImg,self.nCMeta,8,device=self.device)
+        self.ds1 = nn.MaxPool2d(2)
+        self.block2 = Braided_Block(8,8,16,device=self.device)
+        self.ds2 = nn.MaxPool2d(2)
+        self.block3 = Braided_Block(16,16,32,device=self.device)
+        self.ds3 = nn.MaxPool2d(2)
+        self.block4 = Braided_Block(32,32,16,device=self.device)
+        self.us1 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
+        self.block5 = Braided_Block(16,16,8,device=self.device)
+        self.us2 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
+        self.block6 = Braided_Block(8,8,self.nCImg,device=self.device)
+        self.us3 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
+        self.conv = nn.Conv2d(self.nCImg,self.nCImg,1)
+        self.fc = nn.Linear(self.nCMeta,self.nCMeta)
+
+    def forward(self,img,meta):
+        img,meta = self.block1(img,meta)
+        img = self.ds1(img)
+        img,meta = self.block2(img,meta)
+        img = self.ds2(img)
+        img,meta = self.block3(img,meta)
+        img = self.ds3(img)
+        img,meta = self.block4(img,meta)
+        img = self.us1(img)
+        img,meta = self.block5(img,meta)
+        img = self.us2(img)
+        img,meta = self.block6(img,meta)
+        img = self.us3(img)
+        img = self.conv(img)
+        meta = self.fc(meta)
+
+        return (img,meta)
         # Image: Instance Normalisation -> x (scaling from meta) -> Conv -> + (with fully connected meta) -> RelU
         # Meta: Concat with Metrics from instance normalisation -> Batch Normalisation -> FC -> ReLU
-
 
 class Braided_Block(nn.Module):
 
@@ -100,7 +142,7 @@ if __name__ == "__main__":
 
     loss = nn.MSELoss()
 
-    net = Braided_AutoEncoder(7,7,xDim=288,yDim=384)
+    net = Braided_UNet(7,7,xDim=288,yDim=384,device=torch.device("cpu"))
 
     imgOut,metaOut = net(img,meta)
 
