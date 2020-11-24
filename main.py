@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from PyQt5.QtWidgets import QApplication
 
-from models import Discriminator, Generator
+from models import Braided_AutoEncoder
 from datasets import T1_Train_Dataset, T1_Val_Dataset, T1_Test_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
 
@@ -120,25 +120,16 @@ loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=c
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
-batch = next(iter(loaderTrain))
-print(batch["InvTime"])
-
-sys.exit()
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-netG = Generator(7,288,384)
-# netD = Discriminator(1,288,384)
-netG = netG.to(device)
-# netD = netD.to(device)
+netB = Braided_AutoEncoder(7,7,288,384)
+netB = netB.to(device)
 
 loss1 = nn.SmoothL1Loss()
 loss2 = nn.MSELoss()
 
-optimG = optim.Adam(netG.parameters(),lr=lr,betas=(b1,0.999))
-# optimD = optim.Adam(netD.parameters(),lr=lr,betas=(b1,0.999))
+optimB = optim.Adam(netB.parameters(),lr=lr,betas=(b1,0.999))
 
-lrSchedulerG = torch.optim.lr_scheduler.StepLR(optimG,step_size=stepSize,gamma=0.1,verbose=True)
-# lrSchedulerD = torch.optim.lr_scheduler.StepLR(optimD,step_size=3,gamma=0.1,verbose=True)
+lrSchedulerG = torch.optim.lr_scheduler.StepLR(optimB,step_size=stepSize,gamma=0.1,verbose=True)
 
 trainLen = datasetTrain.__len__()
 valLen = datasetVal.__len__()
@@ -152,34 +143,35 @@ for nE in range(numEpochs):
     for i,data in enumerate(loaderTrain):
 
         inpData = data["Images"].to(device)
+        inpInvTime = data["InvTime"].to(device)
         outGT = data["T1Map"].to(device)
 
-        optimG.zero_grad()
-        netG.zero_grad()
+        optimB.zero_grad()
+        netB.zero_grad()
 
-        outT1 = netG(inpData)
-        err1 = loss1(outT1,outGT)
-        err2 = loss2(outT1,outGT)
+        outImg, outMeta = netB(inpData,inpInvTime)
+        err1 = loss1(inpData,outImg)
+        err2 = loss2(inpData,outImg)
+        err3 = loss1(inpInvTime,outMeta)
 
         lossArr[nE,i,0] = i+nE*trainLen
-        lossArr[nE,i,1] = err2.item() + err1.item()
-        runningLoss += err2.item() + err1.item()
+        lossArr[nE,i,1] = err2.item() + err1.item() + err3.item()
+        runningLoss += err2.item() + err1.item() + err3.item()
 
-        err = err1 + err2
+        err = err1 + err2 + err3
         err.backward()
-        optimG.step()
+        optimB.step()
         
         if i % 500 == 0:
-            outT1 = outT1.detach().cpu().numpy()[0,0,:,:]*stdT1+meanT1
-            outGT = outGT.cpu().numpy()[0,0,:,:]*stdT1+meanT1
-
+            outImg = outImg.detach().cpu().numpy()[0,0,:,:]
+            inpData = inpData.cpu().numpy()[0,0,:,:]
 
             fig, ax = plt.subplots(1,3)
-            ax[0].imshow(outT1,vmax=900)
+            ax[0].imshow(outImg,vmax=200)
             ax[0].axis('off')
-            ax[1].imshow(outGT,vmax=900)
+            ax[1].imshow(inpData,vmax=200)
             ax[1].axis('off')
-            im = ax[2].imshow(abs(outT1-outGT),vmax=100,vmin=0,cmap="jet")
+            im = ax[2].imshow(abs(outImg-inpData),vmax=100,vmin=0,cmap="jet")
             fig.colorbar(im,ax=ax[2])
             ax[2].axis('off')
             plt.savefig("{}Epoch_{}_i_{}_img.png".format(figDir,nE+1,i+1))
@@ -198,30 +190,30 @@ for nE in range(numEpochs):
             sys.stdout.write("\r\tSubj {}/{}".format(i*bSize,valLen))
 
             inpData = data["Images"].to(device)
+            inpInvTime = data["InvTime"].to(device)
             outGT = data["T1Map"].to(device)
 
-            optimG.zero_grad()
-            netG.zero_grad()
+            netB.zero_grad()
 
-            outT1 = netG(inpData)
-            err1 = loss1(outT1,outGT)
-            err2 = loss2(outT1,outGT)
+            outImg, outMeta = netB(inpData,inpInvTime)
+            err1 = loss1(inpData,outImg)
+            err2 = loss2(inpData,outImg)
+            err3 = loss1(inpInvTime,outMeta)
 
-           
-            valLoss.append(err2.item() + err1.item())
+            valLoss.append(err2.item() + err1.item() + err3.item())
 
             if i % 50 == 0:
-                outT1 = outT1.detach().cpu().numpy()[0,0,:,:]*stdT1+meanT1
-                outGT = outGT.cpu().numpy()[0,0,:,:]*stdT1+meanT1
-
+                outImg = outImg.detach().cpu().numpy()[0,0,:,:]
+                inpData = inpData.cpu().numpy()[0,0,:,:]
 
                 fig, ax = plt.subplots(1,3)
-                ax[0].imshow(outT1,vmax=900)
+                ax[0].imshow(outImg,vmax=200)
                 ax[0].axis('off')
-                ax[1].imshow(outGT,vmax=900)
+                ax[1].imshow(inpData,vmax=200)
                 ax[1].axis('off')
-                im = ax[2].imshow(abs(outT1-outGT),vmax=100,vmin=0,cmap="jet")
+                im = ax[2].imshow(abs(outImg-inpData),vmax=100,vmin=0,cmap="jet")
                 fig.colorbar(im,ax=ax[2])
+                ax[2].axis('off')
                 plt.savefig("{}Epoch_{}_i_{}_img_val.png".format(figDir,nE+1,i+1))
                 plt.close("all")
 
@@ -230,10 +222,10 @@ for nE in range(numEpochs):
 
         if valLoss < lowestLoss:
             torch.save({"Epoch":nE+1,
-            "Generator_state_dict":netG.state_dict(),
+            "Generator_state_dict":netB.state_dict(),
             "Generator_loss_function1":loss1.state_dict(),
             "Generator_loss_function2":loss2.state_dict(),
-            "Generator_optimizer":optimG.state_dict(),
+            "Generator_optimizer":optimB.state_dict(),
             "Generator_lr_scheduler":lrSchedulerG.state_dict()
             },"{}model.pt".format(modelDir))
             lowestLoss = valLoss

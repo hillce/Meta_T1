@@ -168,7 +168,7 @@ def collate_fn(sampleBatch):
     outGT = torch.cat(outGT)
 
     invTimes = [item['InvTime'] for item in sampleBatch]
-    invTimes = np.array(invTimes)
+    invTimes = torch.tensor(invTimes)
 
     sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes}
     return sample
