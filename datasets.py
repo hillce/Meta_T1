@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import torchvision.transforms as transforms
 
-class T1_Train_Dataset(Dataset):
+class T1_Train_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
@@ -35,13 +35,13 @@ class T1_Train_Dataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.trainSet[index]}
         return sample
 
     def __len__(self):
         return len(self.trainSet)
 
-class T1_Val_Dataset(Dataset):
+class T1_Val_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
@@ -61,22 +61,22 @@ class T1_Val_Dataset(Dataset):
 
     def __getitem__(self, index):
 
-        inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.trainSet[index]))
-        inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.trainSet[index]))
-        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.trainSet[index]))['results']
+        inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.valSet[index]))
+        inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.valSet[index]))
+        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.valSet[index]))['results']
 
         sample = {"Images":inpData,"T1Map":outGT}
 
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.trainSet[index]}
         return sample
 
     def __len__(self):
         return len(self.valSet)
 
-class T1_Test_Dataset(Dataset):
+class T1_Test_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
@@ -97,16 +97,16 @@ class T1_Test_Dataset(Dataset):
 
     def __getitem__(self, index):
 
-        inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.trainSet[index]))
-        inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.trainSet[index]))
-        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.trainSet[index]))['results']
+        inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.testSet[index]))
+        inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.testSet[index]))
+        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.testSet[index]))['results']
 
         sample = {"Images":inpData,"T1Map":outGT}
 
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.trainSet[index]}
         return sample
 
     def __len__(self):
@@ -170,7 +170,10 @@ def collate_fn(sampleBatch):
     invTimes = [item['InvTime'] for item in sampleBatch]
     invTimes = torch.tensor(invTimes)
 
-    sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes}
+    eid = [item['eid'] for item in sampleBatch]
+    eid = torch.tensor(eid)
+
+    sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid}
     return sample
 
 if __name__ == "__main__":
@@ -179,7 +182,7 @@ if __name__ == "__main__":
     toT = ToTensor()
     trnsIn = transforms.Compose([toT,rA])
 
-    dataset = T1_Train_Dataset(transform=trnsIn)
+    dataset = T1_Train_Meta_Dataset(transform=trnsIn)
     loader = DataLoader(dataset,batch_size=2,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 
     batch = next(iter(loader))

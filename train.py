@@ -11,9 +11,10 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from PyQt5.QtWidgets import QApplication
 
-from models import Braided_AutoEncoder
-from datasets import T1_Train_Dataset, T1_Val_Dataset, T1_Test_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
+from models import Braided_AutoEncoder, Braided_UNet, Braided_UNet_Complete
+from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
+from train_utils import plot_images
 
 
 # Arg parser so I can test out different model parameters
@@ -21,13 +22,14 @@ parser = argparse.ArgumentParser(description="Training program for T1 map genera
 parser.add_argument("--dir",help="File directory for numpy images",type=str,default="C:/fully_split_data/",dest="fileDir")
 parser.add_argument("--t1dir",help="File directory for T1 matfiles",type=str,default="C:/T1_Maps/",dest="t1MapDir")
 parser.add_argument("--model_name",help="Name for saving the model",type=str,dest="modelName",required=True)
-parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=False,action='store_true')
+parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=False,action='store_true',dest="load")
 parser.add_argument("-lr",help="Learning rate for the optimizer",type=float,default=1e-3,dest="lr")
 parser.add_argument("-b1",help="Beta 1 for the Adam optimizer",type=float,default=0.5,dest="b1")
 parser.add_argument("-bSize","--batch_size",help="Batch size for dataloader",type=int,default=4,dest="batchSize")
 parser.add_argument("-nE","--num_epochs",help="Number of Epochs to train for",type=int,default=50,dest="numEpochs")
 parser.add_argument("--step_size",help="Step size for learning rate decay",type=int,default=5,dest="stepSize")
-parser.add_argument("--gui",help="Use GUI to pick out parameters (WIP)",type=bool,default=False,dest="gui")
+parser.add_argument("--gui",help="Use GUI to pick out parameters (WIP)",default=False,action='store_true',dest="gui")
+parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
 
 args = parser.parse_args()
 
@@ -60,6 +62,7 @@ if args.gui:
     bSize = hParamDict["batchSize"]
     numEpochs = hParamDict["numEpochs"]
     stepSize = hParamDict["stepSize"]
+    normalise = hParamDict["normalise"]
 
 else:
 
@@ -72,6 +75,7 @@ else:
     bSize = args.batchSize
     numEpochs = args.numEpochs
     stepSize = args.stepSize
+    normalise = args.normalise
 
     modelDir = "./TrainingLogs/{}/".format(modelName)
 
@@ -93,42 +97,53 @@ else:
     hParamDict["batchSize"] = bSize
     hParamDict["numEpochs"] = numEpochs
     hParamDict["stepSize"] = stepSize
+    hParamDict["normalise"] = normalise
 
     with open("{}hparams.json".format(modelDir),"w") as f:
         json.dump(hParamDict,f)
 
-
-print(load)
 figDir = "{}Training_Figures/".format(modelDir)
 os.makedirs(figDir)
 
-meanT1 = 362.66540459
-stdT1 = 501.85027392
-
-rA = Random_Affine(degreesRot=5,trans=(0.01,0.01),shear=5)
+# rA = Random_Affine(degreesRot=5,trans=(0.01,0.01),shear=5)
 toT = ToTensor()
 norm = Normalise()
 
-trnsInTrain = transforms.Compose([toT,norm,rA])
-trnsInVal = transforms.Compose([toT,norm])
+if normalise:
+    trnsInTrain = transforms.Compose([toT,norm])
+    trnsInVal = transforms.Compose([toT,norm])
+else:
+    trnsInTrain = transforms.Compose([toT])
+    trnsInVal = transforms.Compose([toT])
 
-datasetTrain = T1_Train_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInTrain,load=load)
-datasetVal = T1_Val_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=100,transform=trnsInVal,load=load)
-datasetTest = T1_Test_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=100,transform=trnsInVal,load=load)
+datasetTrain = T1_Train_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
+datasetVal = T1_Val_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTest = T1_Test_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
+# testBatch = next(iter(loaderTrain))
+# inpData = testBatch["Images"]
+# print(inpData.size())
+# plt.imshow(inpData[0,0,:,:].numpy())
+# plt.show()
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
-netB = Braided_AutoEncoder(7,7,288,384,device=device)
+# netB = Braided_UNet(7,7,288,384,device=device)
+netB = Braided_UNet_Complete(7,7,device=device)
+
 netB = netB.to(device)
 
-loss1 = nn.SmoothL1Loss()
-loss2 = nn.MSELoss()
-loss3 = nn.MSELoss()
+# for param in netB.parameters():
+#     print(param)
 
+loss1 = nn.SmoothL1Loss()
+w1 = 1000
+loss3 = nn.SmoothL1Loss()
+w3 = 1
 optimB = optim.Adam(netB.parameters(),lr=lr,betas=(b1,0.999))
 
 lrSchedulerG = torch.optim.lr_scheduler.StepLR(optimB,step_size=stepSize,gamma=0.1,verbose=True)
@@ -148,21 +163,21 @@ for nE in range(numEpochs):
         inpInvTime = data["InvTime"].type(torch.FloatTensor)
         inpInvTime = inpInvTime.to(device)
         outGT = data["T1Map"].to(device)
+        eid = data["eid"]
 
         optimB.zero_grad()
         netB.zero_grad()
 
         outImg, outMeta = netB(inpData,inpInvTime)
-        err1 = loss1(inpData,outImg)
-        err2 = loss2(inpData,outImg)
-        err3 = loss3(inpInvTime,outMeta)
+
+        err1 = loss1(inpData,outImg) * w1
+        err3 = loss3(inpInvTime,outMeta) * w3
 
         lossArr[nE,i,0] = i+nE*trainLen
-        lossArr[nE,i,1] = err2.item() + err1.item() + err3.item()
-        runningLoss += err2.item() + err1.item() + err3.item()
+        lossArr[nE,i,1] = err1.item() + err3.item()
+        runningLoss += err1.item() + err3.item()
 
-        err = err1 + err2 + err3
-
+        err = err1 + err3
         err.backward()
         optimB.step()
 
@@ -170,19 +185,14 @@ for nE in range(numEpochs):
         # plt.imshow(inpData)
         # plt.show()
         
-        if i % 500 == 0:
-            outImg = outImg.detach().cpu().numpy()[0,0,:,:]
-            inpData = inpData.cpu().numpy()[0,0,:,:]
+        if i % (trainLen // (bSize*3)) == 0:
+            outImg = outImg.detach().cpu().numpy()[0,:,:,:]
+            inpData = inpData.cpu().numpy()[0,:,:,:]
 
-            fig, ax = plt.subplots(1,3)
-            ax[0].imshow(outImg,vmax=1)
-            ax[0].axis('off')
-            ax[1].imshow(inpData,vmax=1)
-            ax[1].axis('off')
-            im = ax[2].imshow(abs(outImg-inpData),vmax=1,vmin=0,cmap="jet")
-            fig.colorbar(im,ax=ax[2])
-            ax[2].axis('off')
-            plt.savefig("{}Epoch_{}_i_{}_img.png".format(figDir,nE+1,i+1))
+            outMeta = outMeta.detach().cpu().numpy()[0]
+            inpInvTime = inpInvTime.cpu().numpy()[0]
+            
+            plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i)
 
             plt.figure()
             plt.plot(lossArr[nE,:i,0],lossArr[nE,:i,1])
@@ -198,36 +208,27 @@ for nE in range(numEpochs):
             sys.stdout.write("\r\tSubj {}/{}".format(i*bSize,valLen))
 
             inpData = data["Images"].to(device)
-            inpInvTime = data["InvTime"].to(device)
+            inpInvTime = data["InvTime"].type(torch.FloatTensor)
+            inpInvTime = inpInvTime.to(device)
             outGT = data["T1Map"].to(device)
 
             netB.zero_grad()
 
             outImg, outMeta = netB(inpData,inpInvTime)
             err1 = loss1(inpData,outImg)
-            err2 = loss2(inpData,outImg)
             err3 = loss1(inpInvTime,outMeta)
 
-            valLoss.append(err2.item() + err1.item() + err3.item())
+            valLoss.append(err1.item() + err3.item())
 
-            if i % 50 == 0:
-                outImg = outImg.detach().cpu().numpy()[0,0,:,:]
-                inpData = inpData.cpu().numpy()[0,0,:,:]
+            if i % (valLen // (bSize*3)) == 0:
+                outImg = outImg.detach().cpu().numpy()[0,:,:,:]
+                inpData = inpData.cpu().numpy()[0,:,:,:]
 
                 outMeta = outMeta.detach().cpu().numpy()[0]
                 inpInvTime = inpInvTime.cpu().numpy()[0]
-                print(outMeta,inpInvTime)
+                print("\n Output inversion times: {}, input inversion times: {}".format(outMeta,inpInvTime))
 
-                fig, ax = plt.subplots(1,3)
-                ax[0].imshow(outImg,vmax=1)
-                ax[0].axis('off')
-                ax[1].imshow(inpData,vmax=1)
-                ax[1].axis('off')
-                im = ax[2].imshow(abs(outImg-inpData),vmax=1,vmin=0,cmap="jet")
-                fig.colorbar(im,ax=ax[2])
-                ax[2].axis('off')
-                plt.savefig("{}Epoch_{}_i_{}_img_val.png".format(figDir,nE+1,i+1))
-                
+                plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i,val=True)
 
                 x = np.arange(1,8)
                 ax = plt.subplot(111)
@@ -245,7 +246,7 @@ for nE in range(numEpochs):
             torch.save({"Epoch":nE+1,
             "Generator_state_dict":netB.state_dict(),
             "Generator_loss_function1":loss1.state_dict(),
-            "Generator_loss_function2":loss2.state_dict(),
+            "Generator_loss_function2":loss3.state_dict(),
             "Generator_optimizer":optimB.state_dict(),
             "Generator_lr_scheduler":lrSchedulerG.state_dict()
             },"{}model.pt".format(modelDir))
