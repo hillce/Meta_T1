@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from PyQt5.QtWidgets import QApplication
 
 from models import Braided_UNet_Complete
-from datasets import T1_Train_Dataset, T1_Val_Dataset, T1_Test_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
+from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
 from train_utils import plot_images
 
@@ -87,14 +87,12 @@ toT = ToTensor()
 
 trnsInVal = transforms.Compose([toT])
 
-datasetTest = T1_Train_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,transform=trnsInVal,load=True)
+datasetTest = T1_Test_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,transform=trnsInVal,load=True)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 netB = Braided_UNet_Complete(7,7,device=device)
-# netD = Discriminator(1,288,384)
 netB = netB.to(device)
-# netD = netD.to(device)
 
 modelDict = torch.load("{}model.pt".format(modelDir))
 netB.load_state_dict(modelDict["Generator_state_dict"])
@@ -112,10 +110,15 @@ with torch.no_grad():
 
         inpData = data["Images"].to(device)
         inpInvTime = data["InvTime"].type(torch.FloatTensor)
+
+        inpInvTimeFake = torch.ones(inpInvTime.size())*4000
+        print(inpInvTimeFake)
+        
         inpInvTime = inpInvTime.to(device)
+        inpInvTimeFake = inpInvTimeFake.to(device)
         # outGT = data["T1Map"].to(device)
 
-        outImg, outMeta = netB(inpData,inpInvTime)
+        outImg, outMeta = netB(inpData,inpInvTimeFake)
         err1 = loss1(outImg,inpData)
         err2 = loss2(outMeta,inpInvTime)
 

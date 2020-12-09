@@ -13,7 +13,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt 
 
 from torch.utils.tensorboard import SummaryWriter
-from datasets import T1_Train_Dataset, ToTensor, collate_fn, Normalise
+from datasets import T1_Train_Meta_Dataset, ToTensor, collate_fn, Normalise
 # Classic Generator Models
 
 class Braided_AutoEncoder(nn.Module):
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     # trnsIn = transforms.Compose([toT])
     # bSize = 4
 
-    # datasetTrain = T1_Train_Dataset(fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",size=10000,transform=trnsIn,load=False)
+    # datasetTrain = T1_Train_Meta_Dataset(fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",size=10000,transform=trnsIn,load=False)
     # loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 
     # testBatch = next(iter(loaderTrain))

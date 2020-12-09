@@ -70,7 +70,7 @@ class T1_Val_Meta_Dataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.trainSet[index]}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.valSet[index]}
         return sample
 
     def __len__(self):
@@ -106,7 +106,7 @@ class T1_Test_Meta_Dataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.trainSet[index]}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":self.testSet[index]}
         return sample
 
     def __len__(self):
@@ -171,7 +171,6 @@ def collate_fn(sampleBatch):
     invTimes = torch.tensor(invTimes)
 
     eid = [item['eid'] for item in sampleBatch]
-    eid = torch.tensor(eid)
 
     sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid}
     return sample
