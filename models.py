@@ -136,8 +136,10 @@ class Braided_Block(nn.Module):
         self.inNorm = nn.InstanceNorm2d(inCImg)
         self.conv = nn.Conv2d(inCImg,outC,3,padding=1)
         self.bnImg = nn.BatchNorm2d(outC)
+        self.conv2 = nn.Conv2d(outC,outC,3,padding=1)
+        self.bnImg2 = nn.BatchNorm2d(outC)
 
-        # self.scalingFC = nn.Linear(inCMeta*2,1)
+        self.scalingFC = nn.Linear(inCMeta+inCImg,1)
         self.bnMeta = nn.BatchNorm1d(inCMeta+inCImg)
         self.fc = nn.Linear(inCMeta+inCImg,outC)
 
@@ -159,9 +161,8 @@ class Braided_Block(nn.Module):
 
         meta = torch.cat((meta,mNS),dim=1)
 
-        # tempMeta = self.scalingFC(meta)
-
-        # x *= tempMeta[:,:,None,None] # THIS IS AMAZING: Its how you add or multiply an array of (A,B,C,D) and (A,B)
+        tempMeta = self.scalingFC(meta)
+        x *= tempMeta[:,:,None,None] # THIS IS AMAZING: Its how you add or multiply an array of (A,B,C,D) and (A,B)
 
         x = self.conv(x)
         # print("Meta pre batch norm: ",meta.size())
@@ -171,6 +172,8 @@ class Braided_Block(nn.Module):
         x += meta[:,:,None,None]
 
         img = F.relu(self.bnImg(x))
+        img = F.relu(self.bnImg2(self.conv2(img)))
+
         meta = F.relu(meta)
 
         return img,meta
@@ -221,7 +224,7 @@ class Up_Conv_Braided(nn.Module):
 
 class Braided_UNet_Complete(nn.Module):
 
-    def __init__(self,nCImg,nCMeta,xDim=288,yDim=384,device=device):
+    def __init__(self,nCImg,nCMeta,outCImg,outCMeta,xDim=288,yDim=384,device=device):
         super(Braided_UNet_Complete,self).__init__()
 
 
@@ -236,11 +239,11 @@ class Braided_UNet_Complete(nn.Module):
         self.up3 = Up_Conv_Braided(16+8,16,8,device=device)
         self.up4 = Up_Conv_Braided(8+nCImg,8,nCImg,device=device)
 
-        self.outConv1 = nn.Conv2d(nCImg,nCImg,kernel_size=1)
-        self.outConv2 = nn.Conv2d(nCImg,nCImg,kernel_size=1)
+        self.outConv1 = nn.Conv2d(nCImg,outCImg,kernel_size=1)
+        self.outConv2 = nn.Conv2d(outCImg,outCImg,kernel_size=1)
 
         self.outfc1 = nn.Linear(nCImg,nCMeta)
-        self.outfc2 = nn.Linear(nCMeta,nCMeta)
+        self.outfc2 = nn.Linear(nCMeta,outCMeta)
 
     def forward(self,img,meta):
 
@@ -254,6 +257,7 @@ class Braided_UNet_Complete(nn.Module):
         # print("Img size 2: ",img2.size())
         img3,meta3 = self.down4(img2,meta2)
         # print("Img size 3: ",img3.size())
+        # print("Meta size 3: ",meta3.size())
         img4,meta4 = self.up1(img3,img2,meta3)
         # print("Img size 4: ",img4.size())
         img5,meta5 = self.up2(img4,img1,meta4)

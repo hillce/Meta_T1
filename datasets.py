@@ -12,7 +12,7 @@ class T1_Train_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
-    def __init__(self,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
         self.fileDir = fileDir
         self.t1MapDir = t1MapDir
         self.transform = transform
@@ -20,9 +20,9 @@ class T1_Train_Meta_Dataset(Dataset):
         if not load:
             subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
             self.trainSet = np.random.choice(subjList,size)
-            np.save("trainSet",self.trainSet)
+            np.save("{}trainSet.npy".format(modelDir),self.trainSet)
         else:
-            self.trainSet = np.load("trainSet.npy")
+            self.trainSet = np.load("trainSet.npy".format(modelDir))
 
     def __getitem__(self, index):
 
@@ -45,19 +45,19 @@ class T1_Val_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
-    def __init__(self,size=500,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
+    def __init__(self,modelDir,size=500,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
         self.fileDir = fileDir
         self.t1MapDir = t1MapDir
         self.transform = transform
 
         if not load:
             subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
-            self.trainSet = np.load("trainSet.npy")
+            self.trainSet = np.load("{}trainSet.npy".format(modelDir))
             subjList = [x for x in subjList if x not in self.trainSet]
             self.valSet = np.random.choice(subjList,size)
-            np.save("valSet",self.valSet)
+            np.save("{}valSet.npy".format(modelDir),self.valSet)
         else:
-            self.valSet = np.load("valSet.npy")
+            self.valSet = np.load("valSet.npy".format(modelDir))
 
     def __getitem__(self, index):
 
@@ -80,20 +80,20 @@ class T1_Test_Meta_Dataset(Dataset):
     """
     T1 Dataset
     """
-    def __init__(self,size=500,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
+    def __init__(self,modelDir,size=500,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
         self.fileDir = fileDir
         self.t1MapDir = t1MapDir
         self.transform = transform
 
         if not load:
             subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
-            self.trainSet = np.load("trainSet.npy")
-            self.valSet = np.load("valSet.npy")
+            self.trainSet = np.load("{}trainSet.npy".format(modelDir))
+            self.valSet = np.load("{}valSet.npy".format(modelDir))
             subjList = [x for x in subjList if x not in self.trainSet and x not in self.valSet]
             self.testSet = np.random.choice(subjList,size)
-            np.save("testSet",self.testSet)
+            np.save("{}testSet.npy".format(modelDir),self.testSet)
         else:
-            self.testSet = np.load("testSet.npy")
+            self.testSet = np.load("testSet.npy".format(modelDir))
 
     def __getitem__(self, index):
 

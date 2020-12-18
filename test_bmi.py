@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QApplication
 from models import Braided_UNet_Complete
 from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
-from train_utils import plot_images
+from train_utils import plot_images, plot_images_meta
 
 # Arg parser so I can test out different model parameters
 parser = argparse.ArgumentParser(description="Training program for T1 map generation")
@@ -84,25 +84,31 @@ except FileExistsError as e:
 meanT1 = 362.66540459
 stdT1 = 501.85027392
 
-
+# rA = Random_Affine(degreesRot=5,trans=(0.01,0.01),shear=5)
 toT = ToTensor()
 norm = Normalise()
 
 if normQ:
+    trnsInTrain = transforms.Compose([toT,norm])
     trnsInVal = transforms.Compose([toT,norm])
 else:
+    trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
 datasetTest = T1_Test_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,transform=trnsInVal,load=True)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
+with open("./jsonFiles/bmi.json") as f:
+    bmis = json.load(f)
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-netB = Braided_UNet_Complete(7,7,device=device)
+# netB = Braided_UNet_Complete(7,1,device=device)
+netB = Braided_UNet_Complete(7,7,1,1,device=device)
 netB = netB.to(device)
 
 modelDict = torch.load("{}model.pt".format(modelDir))
 netB.load_state_dict(modelDict["Generator_state_dict"])
-# netB.eval()
+netB.eval()
 
 loss1 = nn.SmoothL1Loss()
 loss2 = nn.SmoothL1Loss()
@@ -110,50 +116,52 @@ loss2 = nn.SmoothL1Loss()
 testLen = datasetTest.__len__()
 
 lossArr = np.zeros((testLen,2))
+testLoss = []
+missingBMIS= set()
 with torch.no_grad():
-    print("\nTesting:")
-    runningLoss = 0.0
     for i,data in enumerate(loaderTest):
+        try:
+            inpData = data["Images"].to(device)
+            inpInvTime = data["InvTime"].type(torch.FloatTensor)
+            inpInvTime = inpInvTime.to(device)
+            outGT = data["T1Map"].to(device)
+            eids = data["eid"]
 
-        inpData = data["Images"].to(device)
-        inpInvTime = data["InvTime"].type(torch.FloatTensor)
+            bmi = [bmis[x] for x in eids]
+            bmi = torch.tensor(bmi,device=device)
+            bmi.unsqueeze_(1)
 
-        inpInvTimeFake = torch.ones(inpInvTime.size())*4000
+            outImg, outMeta = netB(inpData,inpInvTime)
+
+            err1 = loss1(outGT,outImg)
+            err3 = loss2(bmi,outMeta)
+
+            testLoss.append(err1.item() + err3.item())
         
-        inpInvTime = inpInvTime.to(device)
-        inpInvTimeFake = inpInvTimeFake.to(device)
+            if i % (testLen//(bSize*10)) == 0:
+                outImg = outImg.cpu().numpy()[0,:,:,:]
+                inpData = inpData.cpu().numpy()[0,:,:,:]
+                outGT = outGT.cpu().numpy()[0,:,:,:]
 
-        # outGT = data["T1Map"].to(device)
+                bmi = bmi.cpu().numpy()[0]
+                outMeta = outMeta.cpu().numpy()[0,:]
 
-        outImg, outMeta = netB(inpData,inpInvTimeFake)
-        err1 = loss1(outImg,inpData)
-        err2 = loss2(outMeta,inpInvTime)
+                np.save("{}i_{}_Fake.npy".format(figDir,i+1),outImg)
+                np.save("{}i_{}_Real.npy".format(figDir,i+1),inpData)
 
-        lossArr[i,0] = i*testLen
-        lossArr[i,1] = err2.item() + err1.item()
-        runningLoss += err2.item() + err1.item()
+                plot_images_meta(outGT,outImg,np.array([bmi,outMeta]),figDir,0,i,test=True,vmaxDiff=0.2)
 
-        err = err1 + err2
-        
-        if i % 50 == 0:
-            outImg = outImg.detach().cpu().numpy()[0,:,:,:]
-            inpData = inpData.cpu().numpy()[0,:,:,:]
+                plt.figure()
+                plt.plot(testLoss,"r.")
+                plt.savefig("{}i_{}_loss.png".format(figDir,i+1))
+                plt.close("all")
 
-            inpInvTime = inpInvTime.cpu().numpy()[0,:]
-            outMeta = outMeta.detach().cpu().numpy()[0,:]
+            sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,testLen,testLoss[-1]))
+        except KeyError as e:
+            missingBMIS.add(str(e))
 
-            np.save("{}i_{}_Fake.npy".format(figDir,i+1),outImg)
-            np.save("{}i_{}_Real.npy".format(figDir,i+1),inpData)
-
-            plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,0,i,test=True,vmaxDiff=None)
-
-            plt.figure()
-            plt.plot(lossArr[:i,0],lossArr[:i,1])
-            plt.savefig("{}i_{}_loss.png".format(figDir,i+1))
-            plt.close("all")
-
-        sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,testLen,runningLoss/((i+1)*4)))
 
     print("-"*50)
 
-
+# with open("missingBMIS.json","w") as f:
+#     json.dump(missingBMIS,f)

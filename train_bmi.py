@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QApplication
 from models import Braided_AutoEncoder, Braided_UNet, Braided_UNet_Complete
 from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
-from train_utils import plot_images
+from train_utils import plot_images, plot_images_meta
 
 
 # Arg parser so I can test out different model parameters
@@ -116,32 +116,23 @@ else:
     trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
-datasetTrain = T1_Train_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
-datasetVal = T1_Val_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
-datasetTest = T1_Test_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTrain = T1_Train_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
+datasetVal = T1_Val_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTest = T1_Test_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
-# testBatch = next(iter(loaderTrain))
-# inpData = testBatch["Images"]
-# print(inpData.size())
-# plt.imshow(inpData[0,0,:,:].numpy())
-# plt.show()
+with open("./jsonFiles/bmi.json") as f:
+    bmis = json.load(f)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
-# netB = Braided_UNet(7,7,288,384,device=device)
-netB = Braided_UNet_Complete(7,7,device=device)
-
+netB = Braided_UNet_Complete(7,7,1,1,device=device)
 netB = netB.to(device)
 
-# for param in netB.parameters():
-#     print(param)
-
 loss1 = nn.SmoothL1Loss()
-w1 = 1000
+w1 = 1
 loss3 = nn.SmoothL1Loss()
 w3 = 1
 optimB = optim.Adam(netB.parameters(),lr=lr,betas=(b1,0.999))
@@ -152,99 +143,113 @@ trainLen = datasetTrain.__len__()
 valLen = datasetVal.__len__()
 
 lowestLoss = 1000000000.0
-lossArr = np.zeros((numEpochs,trainLen,2))
+trainLossArr = []
+valLossArr = []
+missingBMIS = set()
 for nE in range(numEpochs):
     print("\nEpoch [{}/{}]".format(nE+1,numEpochs))
     print("\nTraining:")
     runningLoss = 0.0
+    epochLossArr = []
+    # netB.train()
     for i,data in enumerate(loaderTrain):
-
-        inpData = data["Images"].to(device)
-        inpInvTime = data["InvTime"].type(torch.FloatTensor)
-        inpInvTime = inpInvTime.to(device)
-        outGT = data["T1Map"].to(device)
-        eid = data["eid"]
-
-        
-
-        optimB.zero_grad()
-        netB.zero_grad()
-
-        outImg, outMeta = netB(inpData,inpInvTime)
-
-        err1 = loss1(inpData,outImg) * w1
-        err3 = loss3(inpInvTime,outMeta) * w3
-
-        lossArr[nE,i,0] = i+nE*trainLen
-        lossArr[nE,i,1] = err1.item() + err3.item()
-        runningLoss += err1.item() + err3.item()
-
-        err = err1 + err3
-        err.backward()
-        optimB.step()
-
-        # inpData = inpData.cpu().numpy()[0,0,:,:]
-        # plt.imshow(inpData)
-        # plt.show()
-        
-        if i % (trainLen // (bSize*3)) == 0:
-            outImg = outImg.detach().cpu().numpy()[0,:,:,:]
-            inpData = inpData.cpu().numpy()[0,:,:,:]
-
-            outMeta = outMeta.detach().cpu().numpy()[0]
-            inpInvTime = inpInvTime.cpu().numpy()[0]
-            
-            plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i)
-
-            plt.figure()
-            plt.plot(lossArr[nE,:i,0],lossArr[nE,:i,1])
-            plt.savefig("{}Epoch_{}_i_{}_loss.png".format(figDir,nE+1,i+1))
-            plt.close("all")
-
-        sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,trainLen,runningLoss/((i+1)*4)))
-
-    valLoss = []
-    with torch.no_grad():
-        print("\nValidation:")
-        for i,data in enumerate(loaderVal):
-            sys.stdout.write("\r\tSubj {}/{}".format(i*bSize,valLen))
-
+        try:
             inpData = data["Images"].to(device)
             inpInvTime = data["InvTime"].type(torch.FloatTensor)
             inpInvTime = inpInvTime.to(device)
             outGT = data["T1Map"].to(device)
+            eids = data["eid"]
 
+            bmi = [bmis[x] for x in eids]
+            bmi = torch.tensor(bmi,device=device)
+            bmi.unsqueeze_(1)
+
+            inpInvTime = torch.zeros(inpInvTime.size(),device=device)
+
+            optimB.zero_grad()
             netB.zero_grad()
 
             outImg, outMeta = netB(inpData,inpInvTime)
-            err1 = loss1(inpData,outImg)
-            err3 = loss1(inpInvTime,outMeta)
 
-            valLoss.append(err1.item() + err3.item())
+            err1 = loss1(outGT,outImg) * w1
+            err3 = loss3(bmi,outMeta) * w3
 
-            if i % (valLen // (bSize*3)) == 0:
+            epochLossArr.append(err1.item())# + err3.item())
+            runningLoss += err1.item()# + err3.item()
+
+            err = err1 + err3
+            err.backward()
+            optimB.step()
+
+            if i % (trainLen // (bSize*4)) == 0:
                 outImg = outImg.detach().cpu().numpy()[0,:,:,:]
                 inpData = inpData.cpu().numpy()[0,:,:,:]
+                outGT = outGT.cpu().numpy()[0,:,:,:]
 
                 outMeta = outMeta.detach().cpu().numpy()[0]
-                inpInvTime = inpInvTime.cpu().numpy()[0]
-                print("\n Output inversion times: {}, input inversion times: {}".format(outMeta,inpInvTime))
+                bmi = bmi.cpu().numpy()[0]
+                
+                plot_images_meta(outGT,outImg,np.array([bmi,outMeta]),figDir,nE,i)
 
-                plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i,val=True)
-
-                x = np.arange(1,8)
-                ax = plt.subplot(111)
-                ax.bar(x-0.2, outMeta, width=0.2, color='b', align='center')
-                ax.bar(x+0.2, inpInvTime, width=0.2, color='r', align='center')
-                plt.savefig("{}Epoch_{}_i_{}_InvTime_val.png".format(figDir,nE+1,i+1))
+                if i != 0:
+                    plt.figure()
+                    plt.plot(epochLossArr)
+                    plt.savefig("{}Epoch_{}_i_{}_loss.png".format(figDir,nE+1,i+1))
                 plt.close("all")
+        except KeyError as e:
+            missingBMIS.add(str(e))
+
+        sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,trainLen,runningLoss/((i+1)*4)))
 
 
+    trainLossArr.append(epochLossArr)
+    epochLossArr = []
+    with torch.no_grad():
+        print("\nValidation:")
+        # netB.eval()
+        for i,data in enumerate(loaderVal):
+            try:
+                inpData = data["Images"].to(device)
+                inpInvTime = data["InvTime"].type(torch.FloatTensor)
+                inpInvTime = inpInvTime.to(device)
+                outGT = data["T1Map"].to(device)
+                eids = data["eid"]
 
-        valLoss = sum(valLoss)/valLen
+                bmi = [bmis[x] for x in eids]
+                bmi = torch.tensor(bmi,device=device)
+                bmi.unsqueeze_(1)
+
+                inpInvTime = torch.zeros(inpInvTime.size(),device=device)
+
+                outImg, outMeta = netB(inpData,inpInvTime)
+
+                err1 = loss1(outGT,outImg)
+                # err3 = loss3(bmi,outMeta)
+
+                epochLossArr.append(err1.item())# + err3.item())
+
+                if i % (valLen // (bSize*3)) == 0:
+                    outImg = outImg.detach().cpu().numpy()[0,:,:,:]
+                    inpData = inpData.cpu().numpy()[0,:,:,:]
+                    outGT = outGT.cpu().numpy()[0,:,:,:]
+
+                    outMeta = outMeta.detach().cpu().numpy()[0]
+                    bmi = bmi.cpu().numpy()[0]
+                    
+                    plot_images_meta(outGT,outImg,np.array([bmi,outMeta]),figDir,nE,i,val=True)
+
+            except KeyError as e:
+                missingBMIS.add(str(e))
+
+            sys.stdout.write("\r\tSubj {}/{}".format(i*bSize,valLen))
+
+        valLossArr.append(epochLossArr)
+        valLoss = sum(epochLossArr)/valLen
         print("\n\tVal Loss: {}".format(valLoss))
 
+
         if valLoss < lowestLoss:
+            print("\n\tSaving Model!")
             torch.save({"Epoch":nE+1,
             "Generator_state_dict":netB.state_dict(),
             "Generator_loss_function1":loss1.state_dict(),
@@ -256,5 +261,14 @@ for nE in range(numEpochs):
 
     lrSchedulerG.step()
     print("-"*50)
+
+    with open("{}Training_Loss.json".format(modelDir),"w") as f:
+        json.dump(trainLossArr,f)
+
+    with open("{}Val_Loss.json".format(modelDir),"w") as f:
+        json.dump(valLossArr,f)
+
+    with open("{}Missing_BMIs.json".format(modelDir),"w") as f:
+        json.dump(list(missingBMIS),f)
 
 
