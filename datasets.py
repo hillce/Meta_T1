@@ -23,6 +23,7 @@ class T1_Train_Meta_Dataset(Dataset):
             np.save("{}trainSet.npy".format(modelDir),self.trainSet)
         else:
             self.trainSet = np.load("trainSet.npy".format(modelDir))
+            np.save("{}trainSet.npy".format(modelDir),self.trainSet)
 
     def __getitem__(self, index):
 
@@ -58,6 +59,7 @@ class T1_Val_Meta_Dataset(Dataset):
             np.save("{}valSet.npy".format(modelDir),self.valSet)
         else:
             self.valSet = np.load("valSet.npy".format(modelDir))
+            np.save("{}valSet.npy".format(modelDir),self.valSet)
 
     def __getitem__(self, index):
 
@@ -94,6 +96,7 @@ class T1_Test_Meta_Dataset(Dataset):
             np.save("{}testSet.npy".format(modelDir),self.testSet)
         else:
             self.testSet = np.load("testSet.npy".format(modelDir))
+            np.save("{}testSet.npy".format(modelDir),self.testSet)
 
     def __getitem__(self, index):
 

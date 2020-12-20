@@ -21,7 +21,7 @@ from train_utils import plot_images, plot_images_meta
 parser = argparse.ArgumentParser(description="Training program for T1 map generation")
 parser.add_argument("--dir",help="File directory for numpy images",type=str,default="C:/fully_split_data/",dest="fileDir")
 parser.add_argument("--t1dir",help="File directory for T1 matfiles",type=str,default="C:/T1_Maps/",dest="t1MapDir")
-parser.add_argument("--model_name",help="Name for saving the model",type=str,dest="modelName",required=True)
+parser.add_argument("--model_name",help="Name for saving the model",type=str,dest="modelName",default="Temp")
 parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=False,action='store_true',dest="load")
 parser.add_argument("-lr",help="Learning rate for the optimizer",type=float,default=1e-3,dest="lr")
 parser.add_argument("-b1",help="Beta 1 for the Adam optimizer",type=float,default=0.5,dest="b1")
@@ -30,6 +30,19 @@ parser.add_argument("-nE","--num_epochs",help="Number of Epochs to train for",ty
 parser.add_argument("--step_size",help="Step size for learning rate decay",type=int,default=5,dest="stepSize")
 parser.add_argument("--gui",help="Use GUI to pick out parameters (WIP)",default=False,action='store_true',dest="gui")
 parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
+
+parser.add_argument("--trainSize",help="If not load, will determine the training set size",default=10000,type=int,dest="trainSize")
+parser.add_argument("--valSize",help="If not load, will determine the validation set size",default=1000,type=int,dest="valSize")
+parser.add_argument("--testSize",help="If not load, will determine the test set size",default=1000,type=int,dest="testSize")
+parser.add_argument("--minMeta",help="Minimise for meta-data out, default is to only minimise for the image",action="store_true",default=False,dest="minMeta")
+parser.add_argument("--zeroMeta",help="Zero the meta into the network",action="store_true",default=False,dest="zeroMeta")
+
+parser.add_argument("--inpImgChannels",help="Input number of channels for the image data",default=7,type=int,dest="inImgC")
+parser.add_argument("--outImgChannels",help="Output number of channels for the image data",default=1,type=int,dest="outImgC")
+parser.add_argument("--inpMetaChannels",help="Input number of channels for meta data",default=7,type=int,dest="inMetaC")
+parser.add_argument("--outMetaChannels",help="Output number of channels for meta data",default=1,type=int,dest="outMetaC")
+
+
 
 args = parser.parse_args()
 
@@ -63,6 +76,15 @@ if args.gui:
     numEpochs = hParamDict["numEpochs"]
     stepSize = hParamDict["stepSize"]
     normalise = hParamDict["normalise"]
+    trainSize = hParamDict["trainSize"]
+    valSize = hParamDict["valSize"]
+    testSize = hParamDict["testSize"]
+    inImgC = hParamDict["inImgC"]
+    inMetaC = hParamDict["inMetaC"]
+    outImgC = hParamDict["outImgC"]
+    outMetaC = hParamDict["outMetaC"]
+    minMeta = hParamDict["minMeta"]
+    zeroMeta = hParamDict["zeroMeta"]
 
 else:
 
@@ -76,6 +98,15 @@ else:
     numEpochs = args.numEpochs
     stepSize = args.stepSize
     normalise = args.normalise
+    trainSize = args.trainSize
+    valSize = args.valSize
+    testSize = args.testSize
+    inImgC = args.inImgC
+    inMetaC = args.inMetaC
+    outImgC = args.outImgC
+    outMetaC = args.outMetaC
+    minMeta = args.minMeta
+    zeroMeta = args.zeroMeta
 
     modelDir = "./TrainingLogs/{}/".format(modelName)
 
@@ -98,6 +129,15 @@ else:
     hParamDict["numEpochs"] = numEpochs
     hParamDict["stepSize"] = stepSize
     hParamDict["normalise"] = normalise
+    hParamDict["trainSize"] = trainSize
+    hParamDict["valSize"] = valSize
+    hParamDict["testSize"] = testSize
+    hParamDict["inImgC"] = inImgC
+    hParamDict["inMetaC"] = inMetaC
+    hParamDict["outImgC"] = outImgC
+    hParamDict["outMetaC"] = outMetaC
+    hParamDict["minMeta"] = minMeta
+    hParamDict["zeroMeta"] = zeroMeta
 
     with open("{}hparams.json".format(modelDir),"w") as f:
         json.dump(hParamDict,f)
@@ -105,7 +145,6 @@ else:
 figDir = "{}Training_Figures/".format(modelDir)
 os.makedirs(figDir)
 
-# rA = Random_Affine(degreesRot=5,trans=(0.01,0.01),shear=5)
 toT = ToTensor()
 norm = Normalise()
 
@@ -116,9 +155,9 @@ else:
     trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
-datasetTrain = T1_Train_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
-datasetVal = T1_Val_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
-datasetTest = T1_Test_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTrain = T1_Train_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=trainSize,transform=trnsInTrain,load=load)
+datasetVal = T1_Val_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=valSize,transform=trnsInVal,load=load)
+datasetTest = T1_Test_Meta_Dataset(modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=testSize,transform=trnsInVal,load=load)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
@@ -128,7 +167,7 @@ with open("./jsonFiles/bmi.json") as f:
     bmis = json.load(f)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-netB = Braided_UNet_Complete(7,7,1,1,device=device)
+netB = Braided_UNet_Complete(inImgC,inMetaC,outImgC,outMetaC,device=device)
 netB = netB.to(device)
 
 loss1 = nn.SmoothL1Loss()
@@ -146,6 +185,7 @@ lowestLoss = 1000000000.0
 trainLossArr = []
 valLossArr = []
 missingBMIS = set()
+print("Minimise Meta: {}, Zero Inversion Times: {}".format(minMeta,zeroMeta))
 for nE in range(numEpochs):
     print("\nEpoch [{}/{}]".format(nE+1,numEpochs))
     print("\nTraining:")
@@ -164,7 +204,8 @@ for nE in range(numEpochs):
             bmi = torch.tensor(bmi,device=device)
             bmi.unsqueeze_(1)
 
-            inpInvTime = torch.zeros(inpInvTime.size(),device=device)
+            if zeroMeta:
+                inpInvTime = torch.zeros(inpInvTime.size(),device=device)
 
             optimB.zero_grad()
             netB.zero_grad()
@@ -172,12 +213,14 @@ for nE in range(numEpochs):
             outImg, outMeta = netB(inpData,inpInvTime)
 
             err1 = loss1(outGT,outImg) * w1
-            err3 = loss3(bmi,outMeta) * w3
 
             epochLossArr.append(err1.item())# + err3.item())
             runningLoss += err1.item()# + err3.item()
 
-            err = err1 + err3
+            err = err1
+            if minMeta:
+                err3 = loss3(bmi,outMeta) * w3
+                err += err3
             err.backward()
             optimB.step()
 
@@ -219,14 +262,13 @@ for nE in range(numEpochs):
                 bmi = torch.tensor(bmi,device=device)
                 bmi.unsqueeze_(1)
 
-                inpInvTime = torch.zeros(inpInvTime.size(),device=device)
+                if zeroMeta:
+                    inpInvTime = torch.zeros(inpInvTime.size(),device=device)
 
                 outImg, outMeta = netB(inpData,inpInvTime)
 
                 err1 = loss1(outGT,outImg)
-                # err3 = loss3(bmi,outMeta)
-
-                epochLossArr.append(err1.item())# + err3.item())
+                epochLossArr.append(err1.item())
 
                 if i % (valLen // (bSize*3)) == 0:
                     outImg = outImg.detach().cpu().numpy()[0,:,:,:]

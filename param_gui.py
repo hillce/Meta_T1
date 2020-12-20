@@ -1,6 +1,6 @@
 import sys,os,json,argparse
 
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QLine, QTimer, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QComboBox, QLabel, QGroupBox, QMainWindow, QTableWidgetItem, QWidget, QComboBox, QLineEdit, QVBoxLayout, QHBoxLayout, QApplication, QPushButton, QTableWidget
 
@@ -25,6 +25,15 @@ class Param_GUI(QMainWindow):
         self.l_numEpochs = QLabel("Number of epochs: ")
         self.l_stepSize = QLabel("Step size for lr scheduler: ")
         self.l_norm = QLabel("Normalise: ")
+        self.l_trainSize = QLabel("Train set size: ")
+        self.l_valSize = QLabel("Validation set size: ")
+        self.l_testSize = QLabel("Test set size: ")
+        self.l_inImgC = QLabel("Input Image Channels: ")
+        self.l_inMetaC = QLabel("Input Meta Channels: ")
+        self.l_outImgC = QLabel("Output Image Channels: ")
+        self.l_outMetaC = QLabel("Output Meta Channels: ")
+        self.l_minMeta = QLabel("Minimise Meta: ")
+        self.l_zeroMeta = QLabel("Zero Meta: ")
 
         self.le_fileDir = QLineEdit("C:/fully_split_data/")
         self.le_t1MapDir = QLineEdit("C:/T1_Maps/")
@@ -38,6 +47,17 @@ class Param_GUI(QMainWindow):
         self.s_stepSize =  QLineEdit("20")
         self.cb_norm = QComboBox()
         self.cb_norm.addItems(["False","True"])
+        self.le_trainSize = QLineEdit("10000")
+        self.le_valSize = QLineEdit("1000")
+        self.le_testSize = QLineEdit("1000")
+        self.le_inImgC = QLineEdit("7")
+        self.le_inMetaC = QLineEdit("7")
+        self.le_outImgC = QLineEdit("1")
+        self.le_outMetaC = QLineEdit("1")
+        self.cb_minMeta = QComboBox()
+        self.cb_minMeta.addItems(["True","False"])
+        self.cb_zeroMeta = QComboBox()
+        self.cb_zeroMeta.addItems(["True","False"])
 
         self.pb_confirm = QPushButton("Confirm and Exit")
         self.pb_confirm.clicked.connect(self.confirm_n_close)
@@ -53,6 +73,15 @@ class Param_GUI(QMainWindow):
         self.v_box_1.addWidget(self.l_numEpochs)
         self.v_box_1.addWidget(self.l_stepSize)
         self.v_box_1.addWidget(self.l_norm)
+        self.v_box_1.addWidget(self.l_trainSize)
+        self.v_box_1.addWidget(self.l_valSize)
+        self.v_box_1.addWidget(self.l_testSize)
+        self.v_box_1.addWidget(self.l_inImgC)
+        self.v_box_1.addWidget(self.l_inMetaC)
+        self.v_box_1.addWidget(self.l_outImgC)
+        self.v_box_1.addWidget(self.l_outMetaC)
+        self.v_box_1.addWidget(self.l_minMeta)
+        self.v_box_1.addWidget(self.l_zeroMeta)
 
         self.v_box_2 = QVBoxLayout()
         self.v_box_2.addWidget(self.le_fileDir)
@@ -65,6 +94,15 @@ class Param_GUI(QMainWindow):
         self.v_box_2.addWidget(self.s_numEpochs)
         self.v_box_2.addWidget(self.s_stepSize)
         self.v_box_2.addWidget(self.cb_norm)
+        self.v_box_2.addWidget(self.le_trainSize)
+        self.v_box_2.addWidget(self.le_valSize)
+        self.v_box_2.addWidget(self.le_testSize)
+        self.v_box_2.addWidget(self.le_inImgC)
+        self.v_box_2.addWidget(self.le_inMetaC)
+        self.v_box_2.addWidget(self.le_outImgC)
+        self.v_box_2.addWidget(self.le_outMetaC)
+        self.v_box_2.addWidget(self.cb_minMeta)
+        self.v_box_2.addWidget(self.cb_zeroMeta)
 
         self.h_box = QHBoxLayout()
         self.h_box.addLayout(self.v_box_1)
@@ -80,19 +118,40 @@ class Param_GUI(QMainWindow):
         hParamDict["fileDir"] = self.le_fileDir.text()
         hParamDict["t1MapDir"] = self.le_t1MapDir.text()
         hParamDict["modelName"] = self.le_modelName.text()
+        
         if self.cb_load.currentText() == "False":
             hParamDict["load"] = False
         else:
             hParamDict["load"] = True
+        
         hParamDict["lr"] = float(self.s_lr.text())
         hParamDict["b1"] = float(self.s_b1.text())
         hParamDict["batchSize"] = int(self.s_batchSize.text())
         hParamDict["numEpochs"] = int(self.s_numEpochs.text())
         hParamDict["stepSize"] = int(self.s_stepSize.text())
+        
         if self.cb_norm.currentText() == "False":
             hParamDict["normalise"] = False
         else:
             hParamDict["normalise"] = True
+        
+        hParamDict["trainSize"] = int(self.le_trainSize.text())
+        hParamDict["valSize"] = int(self.le_valSize.text())
+        hParamDict["testSize"] = int(self.le_testSize.text())
+        hParamDict["inImgC"] = int(self.le_inImgC.text())
+        hParamDict["inMetaC"] = int(self.le_inMetaC.text())
+        hParamDict["outImgC"] = int(self.le_outImgC.text())
+        hParamDict["outMetaC"] = int(self.le_outMetaC.text())
+        
+        if self.cb_minMeta.currentText() == "False":
+            hParamDict["minMeta"] = False
+        else:
+            hParamDict["minMeta"] = True
+
+        if self.cb_zeroMeta.currentText() == "False":
+            hParamDict["zeroMeta"] = False
+        else:
+            hParamDict["zeroMeta"] = True
 
         os.makedirs("./TrainingLogs/{}/".format(hParamDict["modelName"]))
 
