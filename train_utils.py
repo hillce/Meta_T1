@@ -5,12 +5,13 @@ def plot_images(inpData,outImg,invTimes,figDir,epoch,index,vmaxDiff=None,val=Fal
 
     _, ax = plt.subplots(3,7)
 
+    print(invTimes)
     for i in range(inpData.shape[0]):
         ax[0,i].imshow(inpData[i])
-        ax[0,i].set_title("{:.0f}".format(invTimes[0,i]))
+        ax[0,i].set_title("{:.0f}".format(invTimes[i]))
         ax[0,i].axis('off')
         ax[1,i].imshow(outImg[i])
-        ax[1,i].set_title("{:.0f}".format(invTimes[1,i]))
+        ax[1,i].set_title("{:.0f}".format(invTimes[i]))
         ax[1,i].axis('off')
         ax[2,i].imshow(abs(outImg[i]-inpData[i]),cmap="jet",vmax=vmaxDiff)
         ax[2,i].set_title("{:.0f}".format(invTimes[0,i]-invTimes[1,i]))
@@ -29,6 +30,9 @@ def plot_images_meta(inpData,outImg,meta,figDir,epoch,index,vmaxDiff=None,val=Fa
 
 
         _, ax = plt.subplots(3,inpData.shape[0])
+
+        if outImg.shape[0] == 1:
+            outImg = np.array([outImg[0]]*inpData.shape[0])
 
         for i in range(inpData.shape[0]):
             ax[0,i].imshow(inpData[i])

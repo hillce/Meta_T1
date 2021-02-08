@@ -1,5 +1,7 @@
 import os, sys, json
 import argparse
+import platform
+import shutil
 
 import numpy as np
 import torch
@@ -14,14 +16,14 @@ from PyQt5.QtWidgets import QApplication
 from models import Braided_AutoEncoder, Braided_UNet, Braided_UNet_Complete
 from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
-from train_utils import plot_images
+from train_utils import plot_images, plot_images_meta
 
 
 # Arg parser so I can test out different model parameters
 parser = argparse.ArgumentParser(description="Training program for T1 map generation")
 parser.add_argument("--dir",help="File directory for numpy images",type=str,default="C:/fully_split_data/",dest="fileDir")
 parser.add_argument("--t1dir",help="File directory for T1 matfiles",type=str,default="C:/T1_Maps/",dest="t1MapDir")
-parser.add_argument("--model_name",help="Name for saving the model",type=str,dest="modelName",required=True)
+parser.add_argument("--model_name",help="Name for saving the model",type=str,default="Debug",dest="modelName")
 parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=False,action='store_true',dest="load")
 parser.add_argument("-lr",help="Learning rate for the optimizer",type=float,default=1e-3,dest="lr")
 parser.add_argument("-b1",help="Beta 1 for the Adam optimizer",type=float,default=0.5,dest="b1")
@@ -30,6 +32,9 @@ parser.add_argument("-nE","--num_epochs",help="Number of Epochs to train for",ty
 parser.add_argument("--step_size",help="Step size for learning rate decay",type=int,default=5,dest="stepSize")
 parser.add_argument("--gui",help="Use GUI to pick out parameters (WIP)",default=False,action='store_true',dest="gui")
 parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
+
+figPerEpoch = 40
+
 
 args = parser.parse_args()
 
@@ -79,11 +84,12 @@ else:
 
     modelDir = "./TrainingLogs/{}/".format(modelName)
 
-    if modelName == "Temp":
+    if modelName == "Debug":
         try:
-            os.unlink(modelDir)
+            shutil.rmtree(modelDir)
         except:
             pass
+
 
     os.makedirs(modelDir)
 
@@ -102,6 +108,11 @@ else:
     with open("{}hparams.json".format(modelDir),"w") as f:
         json.dump(hParamDict,f)
 
+if platform.system() == "Linux":
+    fileDir = "/home/shug4421/Data/fully_split_data/"
+    t1MapDir = "/home/shug4421/Data/T1_Maps/"
+
+
 figDir = "{}Training_Figures/".format(modelDir)
 os.makedirs(figDir)
 
@@ -116,9 +127,9 @@ else:
     trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
-datasetTrain = T1_Train_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
-datasetVal = T1_Val_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
-datasetTest = T1_Test_Meta_Dataset(fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTrain = T1_Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load)
+datasetVal = T1_Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
+datasetTest = T1_Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
@@ -133,7 +144,7 @@ loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=co
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 # netB = Braided_UNet(7,7,288,384,device=device)
-netB = Braided_UNet_Complete(7,7,device=device)
+netB = Braided_UNet_Complete(7,7,1,1,device=device)
 
 netB = netB.to(device)
 
@@ -187,14 +198,14 @@ for nE in range(numEpochs):
         # plt.imshow(inpData)
         # plt.show()
         
-        if i % (trainLen // (bSize*3)) == 0:
+        if i % (trainLen // (bSize*figPerEpoch)) == 0:
             outImg = outImg.detach().cpu().numpy()[0,:,:,:]
             inpData = inpData.cpu().numpy()[0,:,:,:]
 
             outMeta = outMeta.detach().cpu().numpy()[0]
             inpInvTime = inpInvTime.cpu().numpy()[0]
             
-            plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i)
+            plot_images_meta(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i)
 
             plt.figure()
             plt.plot(lossArr[nE,:i,0],lossArr[nE,:i,1])

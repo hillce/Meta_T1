@@ -2,18 +2,11 @@
 # Charles E Hill
 # 21/10/2020
 
-from ast import increment_lineno
 import torch
 from torch._C import device
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-from collections import OrderedDict
-import matplotlib.pyplot as plt 
 
-from torch.utils.tensorboard import SummaryWriter
-from datasets import T1_Train_Meta_Dataset, ToTensor, collate_fn, Normalise
 # Classic Generator Models
 
 class Braided_AutoEncoder(nn.Module):
@@ -166,7 +159,7 @@ class Braided_Block(nn.Module):
 
         x = self.conv(x)
         # print("Meta pre batch norm: ",meta.size())
-        meta = self.bnMeta(meta)
+        # meta = self.bnMeta(meta)
         meta = self.fc(meta)
 
         x += meta[:,:,None,None]
@@ -276,16 +269,60 @@ class Braided_UNet_Complete(nn.Module):
 
         return img,meta
 
+class Braided_Classifier(nn.Module):
+
+    def __init__(self,inCImg,inCMeta,outC,xDim,yDim,device=torch.device("cuda:0")):
+        super(Braided_Classifier,self).__init__()
+        self.device = device
+
+        self.bb1 = Braided_Block(inCImg,inCMeta,16,device=self.device)
+        self.bb2 = Down_Conv_Braided(16,16,32,device=self.device)
+        self.bb3 = Down_Conv_Braided(32,32,64,device=self.device)
+        self.bb4 = Down_Conv_Braided(64,64,128,device=self.device)
+        self.bb5 = Down_Conv_Braided(128,128,256,device=self.device)
+
+        self.flatten = nn.Flatten()
+
+        self.fc1 = nn.Linear(256*(xDim//16)*(yDim//16)+256,1024)
+        self.fc2 = nn.Linear(1024,512)
+        self.fc3 = nn.Linear(512,256)
+        self.fc4 = nn.Linear(256,outC)
+
+
+
+    def forward(self,img,meta):
+
+        img,meta = self.bb1(img,meta)
+        img,meta = self.bb2(img,meta)
+        img,meta = self.bb3(img,meta)
+        img,meta = self.bb4(img,meta)
+        img,meta = self.bb5(img,meta)
+
+        x = self.flatten(img)
+        x = torch.cat((x,meta),dim=1)
+
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = torch.sigmoid(self.fc4(x))
+
+        return x
+
+
 if __name__ == "__main__":
+    device = torch.device("cuda:0")
 
-    img = torch.randn((4,7,288,384))
-    meta = torch.randn((4,3))
+    img = torch.randn((4,7,288,384)).to(device)
+    meta = torch.randn((4,3)).to(device)
 
-    net = Braided_UNet_Complete(7,3,device=torch.device("cpu"))
+    net = Braided_Classifier(7,3,1,288,384,device=device)
+    net.to(device)
 
-    imgOut, metaOut = net(img,meta)
+    with torch.no_grad():
+        metaOut = net(img,meta)
 
-    print(imgOut.size(),metaOut.size())
+    print(metaOut.size())
+
     # toT = ToTensor()
     # norm = Normalise()
     # trnsIn = transforms.Compose([toT])
