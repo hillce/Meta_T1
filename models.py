@@ -147,19 +147,14 @@ class Braided_Block(nn.Module):
     def forward(self,img,meta):
         x = self.inNorm(img)
         
-        # print("img pre mean_n_std: ",img.size())
         mNS = self.mean_n_std(img)
-        # print("MNS output: ",mNS.size())
-        # print("Meta pre mean cat: ",meta.size())
-
         meta = torch.cat((meta,mNS),dim=1)
 
         tempMeta = self.scalingFC(meta)
         x *= tempMeta[:,:,None,None] # THIS IS AMAZING: Its how you add or multiply an array of (A,B,C,D) and (A,B)
 
         x = self.conv(x)
-        # print("Meta pre batch norm: ",meta.size())
-        # meta = self.bnMeta(meta)
+        meta = self.bnMeta(meta)
         meta = self.fc(meta)
 
         x += meta[:,:,None,None]

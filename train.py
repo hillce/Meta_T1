@@ -11,6 +11,8 @@ import torch.nn as nn
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
+from torch.nn.init import xavier_uniform_, zeros_
 from PyQt5.QtWidgets import QApplication
 
 from models import Braided_AutoEncoder, Braided_UNet, Braided_UNet_Complete
@@ -33,8 +35,7 @@ parser.add_argument("--step_size",help="Step size for learning rate decay",type=
 parser.add_argument("--gui",help="Use GUI to pick out parameters (WIP)",default=False,action='store_true',dest="gui")
 parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
 
-figPerEpoch = 40
-
+figPerEpoch = 5
 
 args = parser.parse_args()
 
@@ -116,6 +117,9 @@ if platform.system() == "Linux":
 figDir = "{}Training_Figures/".format(modelDir)
 os.makedirs(figDir)
 
+# Make writer
+writer = SummaryWriter("{}tensorboard".format(modelDir))
+
 # rA = Random_Affine(degreesRot=5,trans=(0.01,0.01),shear=5)
 toT = ToTensor()
 norm = Normalise()
@@ -135,21 +139,22 @@ loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=c
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 loaderTest = DataLoader(datasetTest,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
 
-# testBatch = next(iter(loaderTrain))
-# inpData = testBatch["Images"]
-# print(inpData.size())
-# plt.imshow(inpData[0,0,:,:].numpy())
-# plt.show()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
-# netB = Braided_UNet(7,7,288,384,device=device)
 netB = Braided_UNet_Complete(7,7,1,1,device=device)
-
 netB = netB.to(device)
 
-# for param in netB.parameters():
-#     print(param)
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        xavier_uniform_(m.weight.data)
+        if m.bias.data is not None:
+            zeros_(m.bias.data)
+    if isinstance(m, nn.Linear):
+        xavier_uniform_(m.weight.data)
+        if m.bias.data is not None:
+            zeros_(m.bias.data)   
+
+netB.apply(weights_init)
 
 loss1 = nn.SmoothL1Loss()
 w1 = 1
@@ -164,7 +169,12 @@ valLen = datasetVal.__len__()
 
 lowestLoss = 1000000000.0
 lossArr = np.zeros((numEpochs,trainLen,2))
+
 minMeta = False
+
+trainLossCnt = 0
+valLossCnt = 0
+
 for nE in range(numEpochs):
     print("\nEpoch [{}/{}]".format(nE+1,numEpochs))
     print("\nTraining:")
@@ -202,6 +212,14 @@ for nE in range(numEpochs):
 
         sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,trainLen,runningLoss/((i+1)*bSize)))
 
+        writer.add_scalar('Loss/train_image',err1.item(),trainLossCnt)
+
+        if i % (trainLen//(figPerEpoch*bSize)) == 0:
+            writer.add_images("Images/train_pred",outImg,trainLossCnt)
+            writer.add_images("Images/train_GT",outGT,trainLossCnt)
+
+        trainLossCnt += 1
+ 
     valLoss = []
     with torch.no_grad():
         print("\nValidation:")
@@ -216,7 +234,7 @@ for nE in range(numEpochs):
             netB.zero_grad()
 
             outImg, outMeta = netB(inpData,inpInvTime)
-            err1 = loss1(inpData,outImg)
+            err1 = loss1(outGT,outImg)
             if minMeta:
                 err3 = loss1(inpInvTime,outMeta)
 
@@ -224,6 +242,13 @@ for nE in range(numEpochs):
                 valLoss.append(err1.item() + err3.item())
             else:
                 valLoss.append(err1.item())
+
+            writer.add_scalar("Loss/val_img",err1.item(),valLossCnt)
+
+            if i % (valLen//(figPerEpoch*bSize)) == 0:
+                writer.add_images("Images/val_pred",outImg,valLossCnt)
+                writer.add_images("Images/val_GT",outGT,valLossCnt)
+                valLossCnt += 1
 
         valLoss = sum(valLoss)/valLen
         print("\n\tVal Loss: {}".format(valLoss))
