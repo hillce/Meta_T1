@@ -18,7 +18,7 @@ class T1_Train_Meta_Dataset(Dataset):
         self.transform = transform
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("_2_0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
             self.trainSet = np.random.choice(subjList,size)
             np.save("{}trainSet.npy".format(modelDir),self.trainSet)
         else:
@@ -29,7 +29,10 @@ class T1_Train_Meta_Dataset(Dataset):
 
         inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.trainSet[index]))
         inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.trainSet[index]))
-        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.trainSet[index]))['results']
+        try:
+            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.trainSet[index]))['results']
+        except:
+            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.trainSet[index]))['x']
 
         sample = {"Images":inpData,"T1Map":outGT}
 
@@ -52,7 +55,7 @@ class T1_Val_Meta_Dataset(Dataset):
         self.transform = transform
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(fileDir) if x.endswith("_2_0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(t1MapDir,x[:7]))]
             self.trainSet = np.load("{}trainSet.npy".format(modelDir))
             subjList = [x for x in subjList if x not in self.trainSet]
             self.valSet = np.random.choice(subjList,size)
@@ -65,7 +68,10 @@ class T1_Val_Meta_Dataset(Dataset):
 
         inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,self.valSet[index]))
         inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,self.valSet[index]))
-        outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.valSet[index]))['results']
+        try:
+            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.valSet[index]))['results']
+        except:
+            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,self.valSet[index]))['x']
 
         sample = {"Images":inpData,"T1Map":outGT}
 
@@ -164,16 +170,28 @@ class Normalise(object):
         return sample
 
 def collate_fn(sampleBatch):
+    eid = [item['eid'] for item in sampleBatch]
+
     inpData = [item['Images'].unsqueeze_(0) for item in sampleBatch]
-    inpData = torch.cat(inpData)
+    try:
+        inpData = torch.cat(inpData)
+    except RuntimeError:
+        for i,(item,e) in enumerate(zip(inpData,eid)):
+            if item.size() != torch.Size([1,7,288,384]):
+                inpData[i] = torch.randn((1,7,288,384))
+        inpData = torch.cat(inpData)
 
     outGT = [item['T1Map'].unsqueeze_(0) for item in sampleBatch]
-    outGT = torch.cat(outGT)
+    try:
+        outGT = torch.cat(outGT)
+    except RuntimeError:
+        for i,(item,e) in enumerate(zip(outGT,eid)):
+            if item.size() != torch.Size([1,1,288,384]):
+                outGT[i] = torch.randn((1,1,288,384))
+        outGT = torch.cat(outGT)
 
     invTimes = [item['InvTime'] for item in sampleBatch]
     invTimes = torch.tensor(invTimes)
-
-    eid = [item['eid'] for item in sampleBatch]
 
     sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid}
     return sample

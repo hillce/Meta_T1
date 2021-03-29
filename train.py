@@ -152,7 +152,7 @@ netB = netB.to(device)
 #     print(param)
 
 loss1 = nn.SmoothL1Loss()
-w1 = 1000
+w1 = 1
 loss3 = nn.SmoothL1Loss()
 w3 = 1
 optimB = optim.Adam(netB.parameters(),lr=lr,betas=(b1,0.999))
@@ -164,6 +164,7 @@ valLen = datasetVal.__len__()
 
 lowestLoss = 1000000000.0
 lossArr = np.zeros((numEpochs,trainLen,2))
+minMeta = False
 for nE in range(numEpochs):
     print("\nEpoch [{}/{}]".format(nE+1,numEpochs))
     print("\nTraining:")
@@ -176,43 +177,30 @@ for nE in range(numEpochs):
         outGT = data["T1Map"].to(device)
         eid = data["eid"]
 
-        
-
         optimB.zero_grad()
         netB.zero_grad()
 
         outImg, outMeta = netB(inpData,inpInvTime)
 
-        err1 = loss1(inpData,outImg) * w1
-        err3 = loss3(inpInvTime,outMeta) * w3
+        err1 = loss1(outGT,outImg) * w1
+        if minMeta:
+            err3 = loss3(inpInvTime,outMeta) * w3
 
         lossArr[nE,i,0] = i+nE*trainLen
-        lossArr[nE,i,1] = err1.item() + err3.item()
-        runningLoss += err1.item() + err3.item()
+        if minMeta:
+            lossArr[nE,i,1] = err1.item() + err3.item()
+            runningLoss += err3.item()
+        runningLoss += err1.item()
 
-        err = err1 + err3
+
+        err = err1
+        if minMeta:
+            err += err3
+
         err.backward()
         optimB.step()
 
-        # inpData = inpData.cpu().numpy()[0,0,:,:]
-        # plt.imshow(inpData)
-        # plt.show()
-        
-        if i % (trainLen // (bSize*figPerEpoch)) == 0:
-            outImg = outImg.detach().cpu().numpy()[0,:,:,:]
-            inpData = inpData.cpu().numpy()[0,:,:,:]
-
-            outMeta = outMeta.detach().cpu().numpy()[0]
-            inpInvTime = inpInvTime.cpu().numpy()[0]
-            
-            plot_images_meta(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i)
-
-            plt.figure()
-            plt.plot(lossArr[nE,:i,0],lossArr[nE,:i,1])
-            plt.savefig("{}Epoch_{}_i_{}_loss.png".format(figDir,nE+1,i+1))
-            plt.close("all")
-
-        sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,trainLen,runningLoss/((i+1)*4)))
+        sys.stdout.write("\r\tSubj {}/{}: Loss = {:.4f}".format(i*bSize,trainLen,runningLoss/((i+1)*bSize)))
 
     valLoss = []
     with torch.no_grad():
@@ -229,28 +217,13 @@ for nE in range(numEpochs):
 
             outImg, outMeta = netB(inpData,inpInvTime)
             err1 = loss1(inpData,outImg)
-            err3 = loss1(inpInvTime,outMeta)
+            if minMeta:
+                err3 = loss1(inpInvTime,outMeta)
 
-            valLoss.append(err1.item() + err3.item())
-
-            if i % (valLen // (bSize*3)) == 0:
-                outImg = outImg.detach().cpu().numpy()[0,:,:,:]
-                inpData = inpData.cpu().numpy()[0,:,:,:]
-
-                outMeta = outMeta.detach().cpu().numpy()[0]
-                inpInvTime = inpInvTime.cpu().numpy()[0]
-                print("\n Output inversion times: {}, input inversion times: {}".format(outMeta,inpInvTime))
-
-                plot_images(inpData,outImg,np.array([inpInvTime,outMeta]),figDir,nE,i,val=True)
-
-                x = np.arange(1,8)
-                ax = plt.subplot(111)
-                ax.bar(x-0.2, outMeta, width=0.2, color='b', align='center')
-                ax.bar(x+0.2, inpInvTime, width=0.2, color='r', align='center')
-                plt.savefig("{}Epoch_{}_i_{}_InvTime_val.png".format(figDir,nE+1,i+1))
-                plt.close("all")
-
-
+            if minMeta:
+                valLoss.append(err1.item() + err3.item())
+            else:
+                valLoss.append(err1.item())
 
         valLoss = sum(valLoss)/valLen
         print("\n\tVal Loss: {}".format(valLoss))
