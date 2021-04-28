@@ -1,3 +1,7 @@
+# Script for hyperparameter GUI to choose training hyperparameters
+# Charles Hill
+# 24/4/2021
+
 import sys,os,json,argparse
 
 from PyQt5.QtCore import QLine, QTimer, Qt

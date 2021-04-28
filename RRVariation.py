@@ -135,8 +135,6 @@ for epoch in range(5):
             else:
                 acc.append(0)
 
-
-
         sys.stdout.write("\r[{}/{}] RRTest: {} Loss: {:.4f} Acc: {:.3f}".format(i,len(invTimes),rrTest,err.item(),np.mean(acc)))
 
 

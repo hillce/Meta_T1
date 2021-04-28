@@ -159,8 +159,11 @@ class Normalise(object):
 
     def __init__(self):
 
-        self.normImg = transforms.Normalize([23.15050654, 44.1956957,  49.89248841, 51.43708248, 51.98784791, 18.21313955, 17.58093937],[33.52329497, 79.89539557, 83.93680164, 84.62633451, 84.78080839, 23.92935112, 29.45570738],inplace=True)
-        self.normT1 = transforms.Normalize([362.66540459],[501.85027392])
+        mean = np.load("mean_7Ch.npy")
+        std = np.load("std_7Ch.npy")
+
+        self.normImg = transforms.Normalize(mean,std,inplace=True)
+        self.normT1 = transforms.Normalize([362.66540459],[501.85027392],inplace=True)
 
     def __call__(self,sample):
         inpData = sample["Images"]

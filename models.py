@@ -7,118 +7,7 @@ from torch._C import device
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Classic Generator Models
-
-class Braided_AutoEncoder(nn.Module):
-    """
-    Generator network for recreating the missing image in the sequence of T1,T2,PDFF maps etc.
-    """
-
-    def __init__(self,nCImg,nCMeta,xDim=288,yDim=384,device=device):
-        super(Braided_AutoEncoder,self).__init__()
-        self.device = device
-        self.nCImg = nCImg
-        self.nCMeta = nCMeta
-
-        self.block1 = Braided_Block(self.nCImg,self.nCMeta,8,device=self.device)
-        self.block2 = Braided_Block(8,8,16,device=self.device)
-        self.block3 = Braided_Block(16,16,32,device=self.device)
-        self.block4 = Braided_Block(32,32,16,device=self.device)
-        self.block5 = Braided_Block(16,16,8,device=self.device)
-        self.block6 = Braided_Block(8,8,self.nCImg,device=self.device)
-
-        self.conv = nn.Conv2d(self.nCImg,self.nCImg,1)
-        self.fc = nn.Linear(self.nCMeta,self.nCMeta)
-
-    def forward(self,img,meta):
-        img,meta = self.block1(img,meta)
-        img,meta = self.block2(img,meta)
-        img,meta = self.block3(img,meta)
-        img,meta = self.block4(img,meta)
-        img,meta = self.block5(img,meta)
-        img,meta = self.block6(img,meta)
-        img = self.conv(img)
-        meta = self.fc(meta)
-
-        return (img,meta)
-
-class Braided_UNet(nn.Module):
-    """
-    Generator network for recreating the missing image in the sequence of T1,T2,PDFF maps etc.
-    """
-
-    def __init__(self,nCImg,nCMeta,xDim=288,yDim=384,device=device):
-        super(Braided_UNet,self).__init__()
-        self.device = device
-        self.nCImg = nCImg
-        self.nCMeta = nCMeta
-
-        self.block1 = Braided_Block(self.nCImg,self.nCMeta,8,device=self.device)
-        self.ds1 = nn.MaxPool2d(2)
-
-        self.block2 = Braided_Block(8,8,16,device=self.device)
-        self.ds2 = nn.MaxPool2d(2)
-
-        self.block3 = Braided_Block(16,16,32,device=self.device)
-        self.ds3 = nn.MaxPool2d(2)
-
-        self.block4 = Braided_Block(32,32,64,device=self.device)
-        self.ds4 = nn.MaxPool2d(2)
-
-        self.block5 = Braided_Block(64,64,128,device=self.device)
-        self.ds5 = nn.MaxPool2d(2)
-
-        self.block6 = Braided_Block(128,128,64,device=self.device)
-        self.us1 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
-
-        self.block7 = Braided_Block(64,64,32,device=self.device)
-        self.us2 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
-
-        self.block8 = Braided_Block(32,32,16,device=self.device)
-        self.us3 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
-
-        self.block9 = Braided_Block(16,16,8,device=self.device)
-        self.us4 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
-
-        self.block10 = Braided_Block(8,8,self.nCImg,device=self.device)
-        self.us5 = nn.Upsample(scale_factor=2,mode='bilinear',align_corners=True)
-
-        self.conv1 = nn.Conv2d(self.nCImg,self.nCImg,1)
-        self.conv2 = nn.Conv2d(self.nCImg,self.nCImg,1)
-        self.fc1 = nn.Linear(self.nCMeta,self.nCMeta)
-        self.fc2 = nn.Linear(self.nCMeta,self.nCMeta)
-
-    def forward(self,img,meta):
-        img,meta = self.block1(img,meta)
-        img = self.ds1(img)
-        img,meta = self.block2(img,meta)
-        img = self.ds2(img)
-        img,meta = self.block3(img,meta)
-        img = self.ds3(img)
-        img,meta = self.block4(img,meta)
-        img = self.ds4(img)
-        img,meta = self.block5(img,meta)
-        img = self.ds5(img)
-        img,meta = self.block6(img,meta)
-        img = self.us1(img)
-        img,meta = self.block7(img,meta)
-        img = self.us2(img)
-        img,meta = self.block8(img,meta)
-        img = self.us3(img)
-        img,meta = self.block9(img,meta)
-        img = self.us4(img)
-        img,meta = self.block10(img,meta)
-        img = self.us5(img)
-
-        img = F.relu(self.conv1(img))
-        img = self.conv2(img)
-        
-        meta = self.fc1(meta)
-        meta = self.fc2(meta)
-
-        return (img,meta)
-        # Image: Instance Normalisation -> x (scaling from meta) -> Conv -> + (with fully connected meta) -> RelU
-        # Meta: Concat with Metrics from instance normalisation -> Batch Normalisation -> FC -> ReLU
+# Braided Block and Building blocks
 
 class Braided_Block(nn.Module):
 
@@ -210,7 +99,9 @@ class Up_Conv_Braided(nn.Module):
 
         return img,meta
 
-class Braided_UNet_Complete(nn.Module):
+# Braided UNet and Classifier Complete
+
+class Braided_UNet(nn.Module):
 
     def __init__(self,nCImg,nCMeta,outCImg,outCMeta,xDim=288,yDim=384,device=device):
         super(Braided_UNet_Complete,self).__init__()
@@ -303,20 +194,187 @@ class Braided_Classifier(nn.Module):
 
         return x
 
+class Braided_AutoEncoder(nn.Module):
+    """
+    Generator network for recreating the missing image in the sequence of T1,T2,PDFF maps etc.
+    """
+
+    def __init__(self,nCImg,nCMeta,xDim=288,yDim=384,device=device):
+        super(Braided_AutoEncoder,self).__init__()
+        self.device = device
+        self.nCImg = nCImg
+        self.nCMeta = nCMeta
+
+        self.block1 = Braided_Block(self.nCImg,self.nCMeta,8,device=self.device)
+        self.block2 = Braided_Block(8,8,16,device=self.device)
+        self.block3 = Braided_Block(16,16,32,device=self.device)
+        self.block4 = Braided_Block(32,32,16,device=self.device)
+        self.block5 = Braided_Block(16,16,8,device=self.device)
+        self.block6 = Braided_Block(8,8,self.nCImg,device=self.device)
+
+        self.conv = nn.Conv2d(self.nCImg,self.nCImg,1)
+        self.fc = nn.Linear(self.nCMeta,self.nCMeta)
+
+    def forward(self,img,meta):
+        img,meta = self.block1(img,meta)
+        img,meta = self.block2(img,meta)
+        img,meta = self.block3(img,meta)
+        img,meta = self.block4(img,meta)
+        img,meta = self.block5(img,meta)
+        img,meta = self.block6(img,meta)
+        img = self.conv(img)
+        meta = self.fc(meta)
+
+        return (img,meta)
+
+# AutoEncoder with central loss:
+
+class Double_Conv(nn.Module):
+
+    def __init__(self,inC,outC):
+        super(Double_Conv,self).__init__()
+
+        self.conv1 = nn.Conv2d(inC,outC,3,1,1)
+        self.bn1 = nn.BatchNorm2d(outC)
+        self.conv2 = nn.Conv2d(outC,outC,3,1,1)
+        self.bn2 = nn.BatchNorm2d(outC)
+
+    def forward(self,x):
+
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        print("conv ",x.size())
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        print("conv ",x.size())
+
+        return x
+
+class Down_Conv(nn.Module):
+
+    def __init__(self,inC,outC):
+        super(Down_Conv,self).__init__()
+
+        self.down1 = Double_Conv(inC,outC)
+        self.mp1 = nn.MaxPool2d(2,2)
+
+    def forward(self,x):
+
+        x = self.mp1(self.down1(x))
+        print(x.size())
+
+
+        return x
+
+class Encoder(nn.Module):
+
+    def __init__(self,xDim,yDim,inC=7):
+        super(Encoder,self).__init__()
+
+        self.down1 = Down_Conv(inC,16)
+        self.down2 = Down_Conv(16,32)
+        self.down3 = Down_Conv(32,64)
+        self.down4 = Down_Conv(64,128)
+        self.down5 = Down_Conv(128,256)
+
+        self.flatten = nn.Flatten()
+
+        self.fc1 = nn.Linear(256*(xDim//32)*(yDim//32),1024)
+
+    def forward(self,x):
+
+        x = self.down1(x)
+        x = self.down2(x)
+        x = self.down3(x)
+        x = self.down4(x)
+        x = self.down5(x)
+
+        x = self.flatten(x)
+
+        x = self.fc1(x)
+
+        return x
+
+class Up_Conv(nn.Module):
+
+    def __init__(self,inC,outC,kernel=4,stride=2,padding=1):
+        super(Up_Conv,self).__init__()
+
+        self.upConv = nn.ConvTranspose2d( inC, outC, kernel, stride, padding, bias=False)
+        self.bn = nn.BatchNorm2d(outC)
+
+    def forward(self,x):
+
+        x = self.upConv(x)
+        x = self.bn(x)
+        x = F.leaky_relu(x)
+        print("Up conv ",x.size())
+
+        return x
+
+class Decoder(nn.Module):
+
+    def __init__(self,inC=1024,outC=7,xDim=288,yDim=384):
+        super(Decoder,self).__init__()
+
+        self.up1 = Up_Conv(inC,256,kernel=(xDim//32,yDim//32),stride=1,padding=0)
+        self.up2 = Up_Conv(256,128)
+        self.up3 = Up_Conv(128,64)
+        self.up4 = Up_Conv(64,32)
+        self.up5 = Up_Conv(32,16)
+        self.upFinal = nn.ConvTranspose2d(16,outC,4,2,1)
+
+    def forward(self,x):
+
+        x = x.unsqueeze(-1)
+        x = x.unsqueeze(-1)
+
+        x = self.up1(x)
+        x = self.up2(x)
+        x = self.up3(x)
+        x = self.up4(x)
+        x = self.up5(x)
+
+        x = torch.tanh(self.upFinal(x))
+
+        return(x)
+
+class AutoEncoder_W_Central_Loss(nn.Module):
+
+    def __init__(self,inC,xDim,yDim,outC):
+        super(AutoEncoder_W_Central_Loss,self).__init__()
+
+        self.encoder = Encoder(xDim,yDim,inC=inC)
+        self.decoder = Decoder(outC=outC,xDim=xDim,yDim=yDim)
+
+    def forward(self,x):
+
+        x = self.encoder(x)
+
+        y = self.decoder(x)
+
+        return x, y
 
 if __name__ == "__main__":
     device = torch.device("cuda:0")
 
     img = torch.randn((4,7,288,384)).to(device)
-    meta = torch.randn((4,3)).to(device)
+    # meta = torch.randn((4,3)).to(device)
 
-    net = Braided_Classifier(7,3,1,288,384,device=device)
+
+    net = AutoEncoder_W_Central_Loss(7,288,384,7)
     net.to(device)
 
     with torch.no_grad():
-        metaOut = net(img,meta)
+        x,y = net(img)
 
-    print(metaOut.size())
+    print(x.size(),y.size())
+
+    # net = Braided_Classifier(7,3,1,288,384,device=device)
+    # net.to(device)
+
+    # with torch.no_grad():
+    #     metaOut = net(img,meta)
+
+    # print(metaOut.size())
 
     # toT = ToTensor()
     # norm = Normalise()
