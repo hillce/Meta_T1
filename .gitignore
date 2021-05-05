@@ -4,4 +4,5 @@ TrainingLogs
 jsonFiles
 numpyFiles
 reasons
-.xlsx
+*.xlsx
+models
