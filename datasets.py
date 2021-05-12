@@ -19,31 +19,43 @@ class Base_Dataset(Dataset):
         self.t1MapDir = t1MapDir
         self.transform = transform
         self.size = size
-        self.metaData = meta_loading()
+        tempMetaData = np.load("ownDataset.npz",allow_pickle=True)
+
+        self.metaData = {}
+        print("\n Loading Meta Data.... \n")
+        for idx,k in enumerate(tempMetaData.files):
+            sys.stdout.write("\r [{}/{}]".format(idx,len(tempMetaData.files)))
+            self.metaData[k] = (tempMetaData[k][0].astype(float),tempMetaData[k][1].astype(float))
+        
+        print("[{}/{}]\n".format(len(tempMetaData.files),len(tempMetaData.files)))
+
+        del tempMetaData
 
     def get_itm(self,index,dataset):
 
         inpData = np.load("{}{}_20204_2_0.npy".format(self.fileDir,dataset[index]))
         inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,dataset[index]))
-        inpMeta = self.metaData[dataset[index]]
+        inpMeta = self.metaData["{}_20204_2_0".format(dataset[index])][0]
+        outTag = self.metaData["{}_20204_2_0".format(dataset[index])][1]
 
-        try:
-            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,dataset[index]))['results']
-        except:
-            outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,dataset[index]))['x']
+        # try:
+        #     outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,dataset[index]))['results']
+        # except:
+        #     outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,dataset[index]))['x']
+        outGT = np.zeros((inpData.shape[0],inpData.shape[1],2))
 
         sample = {"Images":inpData,"T1Map":outGT}
 
         if self.transform:
             sample = self.transform(sample)
 
-        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":dataset[index],"Meta":inpMeta}
+        sample = {"Images":sample["Images"],"T1Map":sample["T1Map"],"InvTime":inpDataInvTime,"eid":dataset[index],"Meta":inpMeta,"Tag":outTag}
         return sample
 
     def trim_meta(self,dataset):
         metaCopy = copy.deepcopy(self.metaData)
         for k in metaCopy.keys():
-            if k not in dataset.keys():
+            if k[:7] not in dataset:
                 del self.metaData[k]
 
         del metaCopy
@@ -54,12 +66,15 @@ class Train_Meta_Dataset(Base_Dataset):
         Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
             self.trainSet = np.random.choice(subjList,self.size)
             np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
         else:
-            self.trainSet = np.load("trainSet.npy".format(modelDir))
-            np.save("{}trainSet.npy".format(modelDir),self.trainSet)
+            if os.path.isfile("{}trainSet.npy".format(self.modelDir)):
+                self.testSet = np.load("{}trainSet.npy".format(self.modelDir))
+            else:
+                self.testSet = np.load("trainSet.npy")
+                np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
 
         self.trim_meta(self.trainSet)
 
@@ -75,14 +90,17 @@ class Val_Meta_Dataset(Base_Dataset):
         Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
             self.trainSet = np.load("{}trainSet.npy".format(self.modelDir))
             subjList = [x for x in subjList if x not in self.trainSet]
             self.valSet = np.random.choice(subjList,self.size)
             np.save("{}valSet.npy".format(self.modelDir),self.valSet)
         else:
-            self.valSet = np.load("valSet.npy".format(self.modelDir))
-            np.save("{}valSet.npy".format(self.modelDir),self.valSet)
+            if os.path.isfile("{}valSet.npy".format(self.modelDir)):
+                self.testSet = np.load("{}valSet.npy".format(self.modelDir))
+            else:
+                self.testSet = np.load("valSet.npy")
+                np.save("{}valSet.npy".format(self.modelDir),self.valSet)
 
         self.trim_meta(self.valSet)
 
@@ -98,15 +116,18 @@ class Test_Meta_Dataset(Base_Dataset):
         Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
             self.trainSet = np.load("{}trainSet.npy".format(self.modelDir))
             self.valSet = np.load("{}valSet.npy".format(self.modelDir))
             subjList = [x for x in subjList if x not in self.trainSet and x not in self.valSet]
             self.testSet = np.random.choice(subjList,self.size)
             np.save("{}testSet.npy".format(self.modelDir),self.testSet)
         else:
-            self.testSet = np.load("testSet.npy".format(self.modelDir))
-            np.save("{}testSet.npy".format(self.modelDir),self.testSet)
+            if os.path.isfile("{}testSet.npy".format(self.modelDir)):
+                self.testSet = np.load("{}testSet.npy".format(self.modelDir))
+            else:
+                self.testSet = np.load("testSet.npy")
+                np.save("{}testSet.npy".format(self.modelDir),self.testSet)
 
         self.trim_meta(self.testSet)
 
@@ -189,10 +210,13 @@ def collate_fn(sampleBatch):
         outGT = torch.cat(outGT)
 
     invTimes = [item['InvTime'] for item in sampleBatch]
-    invTimes = torch.tensor(invTimes)
+    invTimes = torch.tensor(invTimes,dtype=torch.float)
 
     metaData = [item["Meta"] for item in sampleBatch]
-    metaData = torch.tensor(metaData)
+    metaData = torch.tensor(metaData,dtype=torch.float)
 
-    sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid,"Meta":metaData}
+    outTag = [item["Tag"] for item in sampleBatch]
+    outTag = torch.tensor(outTag,dtype=torch.float)
+
+    sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid,"Meta":metaData,"Tag":outTag}
     return sample

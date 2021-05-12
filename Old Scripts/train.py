@@ -18,7 +18,6 @@ from PyQt5.QtWidgets import QApplication
 from models import Braided_AutoEncoder, Braided_UNet, Braided_UNet_Complete
 from datasets import T1_Train_Meta_Dataset, T1_Val_Meta_Dataset, T1_Test_Meta_Dataset, Random_Affine, ToTensor, Normalise, collate_fn
 from param_gui import Param_GUI
-from train_utils import plot_images, plot_images_meta
 
 
 # Arg parser so I can test out different model parameters

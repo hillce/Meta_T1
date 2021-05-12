@@ -5,3 +5,5 @@ jsonFiles
 numpyFiles
 reasons
 *.xlsx
+*.npz
+models/Braided_Net

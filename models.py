@@ -104,7 +104,7 @@ class Up_Conv_Braided(nn.Module):
 class Braided_UNet(nn.Module):
 
     def __init__(self,nCImg,nCMeta,outCImg,outCMeta,xDim=288,yDim=384,device=device):
-        super(Braided_UNet_Complete,self).__init__()
+        super(Braided_UNet,self).__init__()
 
 
         self.braidedBlockIn = Braided_Block(nCImg,nCMeta,nCImg,device=device)
@@ -190,7 +190,7 @@ class Braided_Classifier(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        x = torch.sigmoid(self.fc4(x))
+        x = self.fc4(x)
 
         return x
 

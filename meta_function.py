@@ -117,7 +117,7 @@ def meta_loading(fullDataset = True,jsonDir = "./jsonFiles", numpyDir = "./numpy
 
             subDataset = np.array(metaList)
             if k in tagDict.keys():
-                tags[i] = np.array(tagDict[k])
+                tags = np.array(tagDict[k])
 
             ownDataset[k] = (subDataset,tags)
 
@@ -177,3 +177,8 @@ def meta_loading(fullDataset = True,jsonDir = "./jsonFiles", numpyDir = "./numpy
         print("\n Meta Data for Subj0: {} \n Tag for Subj0: {}".format(ownDataset[0][0][:10],ownDataset[1][0]))
 
     return ownDataset
+
+
+if __name__ == "__main__":
+    ownDataset = meta_loading()
+    np.savez("ownDataset.npz", **ownDataset)
