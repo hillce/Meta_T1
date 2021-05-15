@@ -1,4 +1,5 @@
 .vscode/settings.json
+__pycache__
 venv
 TrainingLogs
 jsonFiles
@@ -7,3 +8,4 @@ reasons
 *.xlsx
 *.npz
 models/Braided_Net
+models/VGG_16
