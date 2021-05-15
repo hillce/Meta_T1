@@ -13,12 +13,13 @@ from meta_function import meta_loading
 
 class Base_Dataset(Dataset):
 
-    def __init__(self,modelDir,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",transform=None,size=2000):
+    def __init__(self,modelDir,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",transform=None,size=2000,condense=False):
         self.modelDir = modelDir
         self.fileDir = fileDir
         self.t1MapDir = t1MapDir
         self.transform = transform
         self.size = size
+        self.condense = condense
         tempMetaData = np.load("ownDataset.npz",allow_pickle=True)
 
         self.metaData = {}
@@ -27,7 +28,7 @@ class Base_Dataset(Dataset):
             sys.stdout.write("\r [{}/{}]".format(idx,len(tempMetaData.files)))
             self.metaData[k] = (tempMetaData[k][0].astype(float),tempMetaData[k][1].astype(float))
         
-        print("[{}/{}]\n".format(len(tempMetaData.files),len(tempMetaData.files)))
+        sys.stdout.write("\r [{}/{}]\n".format(len(tempMetaData.files),len(tempMetaData.files)))
 
         del tempMetaData
 
@@ -37,6 +38,12 @@ class Base_Dataset(Dataset):
         inpDataInvTime = np.load("{}{}_20204_2_0_inv_times.npy".format(self.fileDir,dataset[index]))
         inpMeta = self.metaData["{}_20204_2_0".format(dataset[index])][0]
         outTag = self.metaData["{}_20204_2_0".format(dataset[index])][1]
+
+        if self.condense:
+            if np.sum(outTag) >= 1:
+                outTag = 1.0
+            else:
+                outTag = 0.0
 
         # try:
         #     outGT = loadmat("{}{}_20204_2_0.mat".format(self.t1MapDir,dataset[index]))['results']
@@ -62,8 +69,8 @@ class Base_Dataset(Dataset):
 
 class Train_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
@@ -71,9 +78,9 @@ class Train_Meta_Dataset(Base_Dataset):
             np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
         else:
             if os.path.isfile("{}trainSet.npy".format(self.modelDir)):
-                self.testSet = np.load("{}trainSet.npy".format(self.modelDir))
+                self.trainSet = np.load("{}trainSet.npy".format(self.modelDir))
             else:
-                self.testSet = np.load("trainSet.npy")
+                self.trainSet = np.load("trainSet.npy")
                 np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
 
         self.trim_meta(self.trainSet)
@@ -86,8 +93,8 @@ class Train_Meta_Dataset(Base_Dataset):
 
 class Val_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
@@ -97,9 +104,9 @@ class Val_Meta_Dataset(Base_Dataset):
             np.save("{}valSet.npy".format(self.modelDir),self.valSet)
         else:
             if os.path.isfile("{}valSet.npy".format(self.modelDir)):
-                self.testSet = np.load("{}valSet.npy".format(self.modelDir))
+                self.valSet = np.load("{}valSet.npy".format(self.modelDir))
             else:
-                self.testSet = np.load("valSet.npy")
+                self.valSet = np.load("valSet.npy")
                 np.save("{}valSet.npy".format(self.modelDir),self.valSet)
 
         self.trim_meta(self.valSet)
@@ -112,8 +119,8 @@ class Val_Meta_Dataset(Base_Dataset):
 
 class Test_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
@@ -214,9 +221,12 @@ def collate_fn(sampleBatch):
 
     metaData = [item["Meta"] for item in sampleBatch]
     metaData = torch.tensor(metaData,dtype=torch.float)
+    # metaData.unsqueeze_(1)
 
     outTag = [item["Tag"] for item in sampleBatch]
     outTag = torch.tensor(outTag,dtype=torch.float)
+    if type(sampleBatch[0]["Tag"]) == float:
+        outTag.unsqueeze_(1)
 
     sample = {"Images":inpData,"T1Map":outGT,"InvTime":invTimes,"eid":eid,"Meta":metaData,"Tag":outTag}
     return sample

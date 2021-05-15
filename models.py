@@ -1,9 +1,9 @@
 # Generator and Discriminator models
 # Charles E Hill
 # 21/10/2020
-
+import sys
 import torch
-from torch._C import device
+from torch import device
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -31,6 +31,7 @@ class Braided_Block(nn.Module):
         out = torch.ones((mean.size()[0],mean.size()[1]),device=self.device)
         out *= mean[:,:]
         out *= std[:,:]
+        # out.unsqueeze_(1)
         return out
 
     def forward(self,img,meta):
@@ -357,24 +358,17 @@ if __name__ == "__main__":
     device = torch.device("cuda:0")
 
     img = torch.randn((4,7,288,384)).to(device)
-    # meta = torch.randn((4,3)).to(device)
+    meta = torch.randn((4,694)).to(device)
 
 
-    net = AutoEncoder_W_Central_Loss(7,288,384,7)
+    net = Braided_Classifier(7,694,1,288,384,device=device)
     net.to(device)
+    net.eval()
 
     with torch.no_grad():
-        x,y = net(img)
+        metaOut = net(img,meta)
 
-    print(x.size(),y.size())
-
-    # net = Braided_Classifier(7,3,1,288,384,device=device)
-    # net.to(device)
-
-    # with torch.no_grad():
-    #     metaOut = net(img,meta)
-
-    # print(metaOut.size())
+    print(metaOut.size())
 
     # toT = ToTensor()
     # norm = Normalise()
