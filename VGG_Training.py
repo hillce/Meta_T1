@@ -26,6 +26,7 @@ parser.add_argument("-nE","--num_epochs",help="Number of Epochs to train for",ty
 parser.add_argument("--step_size",help="Step size for learning rate decay",type=int,default=5,dest="stepSize")
 parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
 parser.add_argument("--con","-condense",help="Whether to condense Tags to single include/exclude",default=False,action='store_true',dest="condense")
+parser.add_argument("--device",help="Device to run training on",type=str,default="cuda:0",dest="device")
 
 figPerEpoch = 5
 args = parser.parse_args()
@@ -41,7 +42,7 @@ numEpochs = args.numEpochs
 stepSize = args.stepSize
 normalise = args.normalise
 condense = args.condense
-
+device = args.device
 
 modelDir = "./models/VGG_16/{}/".format(modelName)
 
@@ -64,6 +65,7 @@ hParamDict["batchSize"] = bSize
 hParamDict["numEpochs"] = numEpochs
 hParamDict["stepSize"] = stepSize
 hParamDict["normalise"] = normalise
+hParamDict["device"] = device
 
 with open("{}hparams.json".format(modelDir),"w") as f:
     json.dump(hParamDict,f)
@@ -100,8 +102,8 @@ if condense:
 else:
     outSize = batch["Tag"].size()[1]
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+device = torch.device(device if torch.cuda.is_available() else "cpu")
 
 net = vgg16_bn(pretrained=True)
 numFtrs = net.classifier[6].in_features
