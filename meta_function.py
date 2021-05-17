@@ -129,7 +129,9 @@ def meta_loading(fullDataset = True,jsonDir = "./jsonFiles", numpyDir = "./numpy
         bBoxesLength = 16
         errLength = errFlat.shape[1]
 
-        ownDataset = np.zeros((subjLength,dataLength + bBoxesLength + errLength))
+        # ownDataset = np.zeros((subjLength,dataLength + bBoxesLength + errLength))
+
+        ownDataset = {}
 
         k0 = list(tagDict.keys())[0]
         tags = np.zeros((subjLength,len(tagDict[k0])))
@@ -168,17 +170,17 @@ def meta_loading(fullDataset = True,jsonDir = "./jsonFiles", numpyDir = "./numpy
 
             metaList.extend(errMeta)
 
-            ownDataset[i,:] = np.array(metaList)
+            subDataset = np.array(metaList)
             if k in tagDict.keys():
                 tags[i] = np.array(tagDict[k])
 
-        ownDataset = (ownDataset,tags)
+            ownDataset[k] = (subDataset,tags)
 
-        print("\n Meta Data for Subj0: {} \n Tag for Subj0: {}".format(ownDataset[0][0][:10],ownDataset[1][0]))
+        # print("\n Meta Data for Subj0: {} \n Tag for Subj0: {}".format(ownDataset[0][0][:10],ownDataset[1][0]))
 
     return ownDataset
 
 
 if __name__ == "__main__":
-    ownDataset = meta_loading()
-    np.savez("ownDataset.npz", **ownDataset)
+    ownDataset = meta_loading(fullDataset=False)
+    np.savez("ownDataset_float.npz", **ownDataset)
