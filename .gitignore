@@ -9,3 +9,4 @@ reasons
 *.npz
 models/Braided_Net
 models/VGG_16
+models/DCGAN_ESQ
