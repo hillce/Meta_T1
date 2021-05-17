@@ -6,6 +6,9 @@ import torch
 from torch import device
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models.vgg import vgg16_bn
+
+from train_utils import get_device_metrics
 
 # Braided Block and Building blocks
 
@@ -243,9 +246,7 @@ class Double_Conv(nn.Module):
     def forward(self,x):
 
         x = F.leaky_relu(self.bn1(self.conv1(x)))
-        print("conv ",x.size())
         x = F.leaky_relu(self.bn2(self.conv2(x)))
-        print("conv ",x.size())
 
         return x
 
@@ -260,8 +261,6 @@ class Down_Conv(nn.Module):
     def forward(self,x):
 
         x = self.mp1(self.down1(x))
-        print(x.size())
-
 
         return x
 
@@ -354,57 +353,154 @@ class AutoEncoder_W_Central_Loss(nn.Module):
 
         return x, y
 
+# DCGAN_ESQ
+
+class DCGAN_ESG(nn.Module):
+
+    def __init__(self,inMeta=694,inImg=7,outMeta=7,outSize=12):
+        super(DCGAN_ESG,self).__init__()
+
+        self.meta_arm = Meta_Arm(inMeta,outMeta)
+        self.vgg_arm = vgg16_bn(pretrained=True)
+
+        numFtrs = self.vgg_arm.classifier[6].in_features
+        self.vgg_arm.classifier[6] = nn.Linear(numFtrs,outSize)
+        numChannels = self.vgg_arm.features[0].out_channels
+        self.vgg_arm.features[0] = nn.Conv2d(inImg+outMeta, numChannels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+
+    def forward(self,x_img,x_meta):
+
+        x_meta = self.meta_arm(x_meta)
+        x_img = torch.cat([x_img,x_meta],dim=1)
+
+        out = self.vgg_arm(x_img)
+        return out
+
+class Meta_Arm(nn.Module):
+
+    def __init__(self,inMeta,nC,nGF=16):
+        super(Meta_Arm,self).__init__()
+
+        self.convTrans0 = nn.ConvTranspose2d(inMeta,nGF*16, (3**2,4**2), 1, 0, bias=False)
+        self.bn0 = nn.BatchNorm2d(nGF * 16)
+        
+        self.convTrans1 = nn.ConvTranspose2d(nGF*16,nGF*8, 4, (2,3), 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(nGF * 8)
+
+        self.convTrans2 = nn.ConvTranspose2d(nGF*8,nGF*4, 4, (2,1), 1, bias=False)
+        self.bn2 = nn.BatchNorm2d(nGF * 4)     
+
+        self.convTrans3 = nn.ConvTranspose2d(nGF*4,nGF*2, 4, 2, 1,bias=False)
+        self.bn3 = nn.BatchNorm2d(nGF * 2)     
+
+        self.convTrans4 = nn.ConvTranspose2d(nGF*2,nGF, 4, 2 ,1,bias=False)
+        self.bn4 = nn.BatchNorm2d(nGF)     
+
+        self.convTrans5 = nn.ConvTranspose2d(nGF,nC, 4, 2, 1, bias=False)
+
+    def forward(self,x):
+        x = x.unsqueeze_(2)
+        x = x.unsqueeze_(2)
+
+        x = F.leaky_relu(self.bn0(self.convTrans0(x)))
+        x = F.leaky_relu(self.bn1(self.convTrans1(x)))
+        x = F.leaky_relu(self.bn2(self.convTrans2(x)))
+        x = F.leaky_relu(self.bn3(self.convTrans3(x)))
+        x = F.leaky_relu(self.bn4(self.convTrans4(x)))
+
+        x = torch.tanh(self.convTrans5(x))
+
+        return x
+
+# VGG_Concat
+
+class Triple_Conv(nn.Module):
+
+    def __init__(self,inC,outC):
+        super(Triple_Conv,self).__init__()
+
+        self.conv1 = nn.Conv2d(inC,outC,3,1,1)
+        self.bn1 = nn.BatchNorm2d(outC)
+        self.conv2 = nn.Conv2d(outC,outC,3,1,1)
+        self.bn2 = nn.BatchNorm2d(outC)
+        self.conv3 = nn.Conv2d(outC,outC,3,1,1)
+        self.bn3 = nn.BatchNorm2d(outC)
+
+    def forward(self,x):
+
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x = F.leaky_relu(self.bn3(self.conv3(x)))
+
+        return x
+
+class Down_Conv_Triple(nn.Module):
+
+    def __init__(self,inC,outC):
+        super(Down_Conv_Triple,self).__init__()
+
+        self.down1 = Triple_Conv(inC,outC)
+        self.mp1 = nn.MaxPool2d(2,2)
+
+    def forward(self,x):
+
+        x = self.mp1(self.down1(x))
+
+        return x
+
+class VGG_Concat(nn.Module):
+
+    def __init__(self,inC,inCMeta,outSize,xDim=288,yDim=384):
+        super(VGG_Concat,self).__init__()
+
+        self.dConv0 = Down_Conv(inC,64)
+        self.dConv1 = Down_Conv(64,128)
+        self.dConv2 = Down_Conv_Triple(128,256)
+        self.dConv3 = Down_Conv_Triple(256,512)
+        self.dConv4 = Down_Conv_Triple(512,512)
+
+        self.flatten = nn.Flatten()
+
+        self.fc0 = nn.Linear(512*(xDim//32)*(yDim//32),4096)
+        self.fc1 = nn.Linear(4096+inCMeta,4096)
+        self.fc2 = nn.Linear(4096,1000)
+        self.fc3 = nn.Linear(1000,outSize)
+
+    def forward(self,x,meta):
+
+        x = self.dConv0(x)
+        x = self.dConv1(x)
+        x = self.dConv2(x)
+        x = self.dConv3(x)
+        x = self.dConv4(x)
+
+        x = self.flatten(x)
+
+        x = F.leaky_relu(self.fc0(x))
+
+        x = torch.cat([x,meta],dim=1)
+
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = self.fc3(x)
+
+        return x
+
+
 if __name__ == "__main__":
-    device = torch.device("cuda:0")
+    deviceMetrics, sD = get_device_metrics(memLimit=3000)
+    device = torch.device(sD)
 
     img = torch.randn((4,7,288,384)).to(device)
     meta = torch.randn((4,694)).to(device)
 
+    net = VGG_Concat(inC=7,inCMeta=694,outSize=12)
+    # net = Braided_Classifier(7,694,1,288,384,device=device)
 
-    net = Braided_Classifier(7,694,1,288,384,device=device)
     net.to(device)
     net.eval()
 
     with torch.no_grad():
-        metaOut = net(img,meta)
+        out = net(img,meta)
 
-    print(metaOut.size())
-
-    # toT = ToTensor()
-    # norm = Normalise()
-    # trnsIn = transforms.Compose([toT])
-    # bSize = 4
-
-    # datasetTrain = T1_Train_Meta_Dataset(fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",size=10000,transform=trnsIn,load=False)
-    # loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
-
-    # testBatch = next(iter(loaderTrain))
-    # img = testBatch["Images"]
-    # print(img.size())
-    # meta = testBatch["InvTime"].type(torch.FloatTensor)
-    # print(meta.size(),meta)
-
-    # plt.imshow(img[0,0,:,:].numpy())
-    # plt.show()
-
-    # loss = nn.MSELoss()
-
-    # net = Braided_UNet(7,7,device=torch.device("cpu"))
-
-    # imgOut,metaOut = net(img,meta)
-
-    # print(imgOut.size(),metaOut.size())
-
-    # err = loss(imgOut,img)
-
-    # plt.figure()
-    # plt.imshow(imgOut[0,0,:,:].detach().numpy())
-    # plt.show()
-
-    # plt.figure()
-    # plt.imshow(img[0,0,:,:].detach().numpy())
-    # plt.show()
-    
-    # print(err.item())
-
-    # err.backward()
+    print(out.size())
