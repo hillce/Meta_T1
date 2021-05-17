@@ -1,5 +1,4 @@
 .vscode/settings.json
-__pycache__
 venv
 TrainingLogs
 jsonFiles
@@ -9,4 +8,5 @@ reasons
 *.npz
 models/Braided_Net
 models/VGG_16
+models/DCGAN_ESQ
 featureImportance
