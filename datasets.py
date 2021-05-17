@@ -13,7 +13,7 @@ from meta_function import meta_loading
 
 class Base_Dataset(Dataset):
 
-    def __init__(self,modelDir,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",transform=None,size=2000,condense=False):
+    def __init__(self,modelDir,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",transform=None,size=2000,condense=False,removeBadSequence=True):
         self.modelDir = modelDir
         self.fileDir = fileDir
         self.t1MapDir = t1MapDir
@@ -26,9 +26,15 @@ class Base_Dataset(Dataset):
         print("\n Loading Meta Data.... \n")
         for idx,k in enumerate(tempMetaData.files):
             sys.stdout.write("\r [{}/{}]".format(idx,len(tempMetaData.files)))
-            self.metaData[k] = (tempMetaData[k][0].astype(float),tempMetaData[k][1].astype(float))
+            if removeBadSequence:
+                tag = tempMetaData[k][1].astype(float)
+                if tag[1] != 1:
+                    self.metaData[k] = (tempMetaData[k][0].astype(float),tag)
+            else:
+                self.metaData[k] = (tempMetaData[k][0].astype(float),tempMetaData[k][1].astype(float))
         
         sys.stdout.write("\r [{}/{}]\n".format(len(tempMetaData.files),len(tempMetaData.files)))
+        sys.stdout.write("Meta Instances Left: {}\n".format(len(self.metaData.keys())))
 
         del tempMetaData
 
@@ -69,8 +75,8 @@ class Base_Dataset(Dataset):
 
 class Train_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False,removeBadSequence=True):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense,removeBadSequence=removeBadSequence)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
@@ -93,8 +99,8 @@ class Train_Meta_Dataset(Base_Dataset):
 
 class Val_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False,removeBadSequence=True):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense,removeBadSequence=removeBadSequence)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
@@ -119,8 +125,8 @@ class Val_Meta_Dataset(Base_Dataset):
 
 class Test_Meta_Dataset(Base_Dataset):
 
-    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False):
-        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense)
+    def __init__(self,modelDir,size=2000,fileDir="C:/fully_split_data/",t1MapDir="C:/T1_Maps/",load=True,transform=None,condense=False,removeBadSequence=True):
+        Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense,removeBadSequence=removeBadSequence)
 
         if not load:
             subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
