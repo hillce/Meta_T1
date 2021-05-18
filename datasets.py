@@ -23,7 +23,7 @@ class Base_Dataset(Dataset):
         tempMetaData = np.load("ownDataset.npz",allow_pickle=True)
 
         self.metaData = {}
-        print("\n Loading Meta Data.... \n")
+        print("\n Loading Meta Data.... (remove bad sequence: {})\n".format(removeBadSequence))
         for idx,k in enumerate(tempMetaData.files):
             sys.stdout.write("\r [{}/{}]".format(idx,len(tempMetaData.files)))
             if removeBadSequence:
@@ -79,14 +79,17 @@ class Train_Meta_Dataset(Base_Dataset):
         Base_Dataset.__init__(self,modelDir,fileDir=fileDir,t1MapDir=t1MapDir,transform=transform,size=size,condense=condense,removeBadSequence=removeBadSequence)
 
         if not load:
-            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
+            subjList = [x[:7] for x in os.listdir(self.fileDir) if x.endswith("_2_0.npy") if x[:-4] in self.metaData.keys()]# if os.path.isfile("{}{}_20204_2_0.mat".format(self.t1MapDir,x[:7]))]
             self.trainSet = np.random.choice(subjList,self.size)
             np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
         else:
             if os.path.isfile("{}trainSet.npy".format(self.modelDir)):
                 self.trainSet = np.load("{}trainSet.npy".format(self.modelDir))
             else:
-                self.trainSet = np.load("trainSet.npy")
+                if removeBadSequence:
+                    self.trainSet = np.load("trainSet_rmBSQ.npy")
+                else:
+                    self.trainSet = np.load("trainSet.npy")
                 np.save("{}trainSet.npy".format(self.modelDir),self.trainSet)
 
         self.trim_meta(self.trainSet)
@@ -112,7 +115,10 @@ class Val_Meta_Dataset(Base_Dataset):
             if os.path.isfile("{}valSet.npy".format(self.modelDir)):
                 self.valSet = np.load("{}valSet.npy".format(self.modelDir))
             else:
-                self.valSet = np.load("valSet.npy")
+                if removeBadSequence:
+                    self.valSet = np.load("valSet_rmBSQ.npy")
+                else:
+                    self.valSet = np.load("valSet.npy")
                 np.save("{}valSet.npy".format(self.modelDir),self.valSet)
 
         self.trim_meta(self.valSet)
@@ -139,7 +145,10 @@ class Test_Meta_Dataset(Base_Dataset):
             if os.path.isfile("{}testSet.npy".format(self.modelDir)):
                 self.testSet = np.load("{}testSet.npy".format(self.modelDir))
             else:
-                self.testSet = np.load("testSet.npy")
+                if removeBadSequence:
+                    self.testSet = np.load("testSet_rmBSQ.npy")
+                else:
+                    self.testSet = np.load("testSet.npy")
                 np.save("{}testSet.npy".format(self.modelDir),self.testSet)
 
         self.trim_meta(self.testSet)
