@@ -93,9 +93,9 @@ else:
     trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
-datasetTrain = Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=10000,transform=trnsInTrain,load=load,condense=condense,removeBadSequence=rmBadSeq)
-datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
-datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=1000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetTrain = Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=20000,transform=trnsInTrain,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=4000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=4000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
