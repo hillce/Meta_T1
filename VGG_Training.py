@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description="Training program for T1 map genera
 parser.add_argument("--dir",help="File directory for numpy images",type=str,default="C:/fully_split_data/",dest="fileDir")
 parser.add_argument("--t1dir",help="File directory for T1 matfiles",type=str,default="C:/T1_Maps/",dest="t1MapDir")
 parser.add_argument("--model_name",help="Name for saving the model",type=str,default="Debug",dest="modelName")
-parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=True,action='store_true',dest="load")
+parser.add_argument("--load",help="Load the preset trainSets, or redistribute (Bool)",default=False,action='store_true',dest="load")
 parser.add_argument("-lr",help="Learning rate for the optimizer",type=float,default=1e-3,dest="lr")
 parser.add_argument("-b1",help="Beta 1 for the Adam optimizer",type=float,default=0.5,dest="b1")
 parser.add_argument("-bSize","--batch_size",help="Batch size for dataloader",type=int,default=4,dest="batchSize")
