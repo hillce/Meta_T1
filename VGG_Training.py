@@ -94,8 +94,8 @@ else:
     trnsInVal = transforms.Compose([toT])
 
 datasetTrain = Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=20000,transform=trnsInTrain,load=load,condense=condense,removeBadSequence=rmBadSeq)
-datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=4000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
-datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=4000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
@@ -119,17 +119,17 @@ net.features[0] = nn.Conv2d(7, numChannels, kernel_size=(3, 3), stride=(1, 1), p
 
 net = net.to(device)
 
-def weights_init(m):
-    if isinstance(m, nn.Conv2d):
-        xavier_uniform_(m.weight.data)
-        if m.bias.data is not None:
-            zeros_(m.bias.data)
-    if isinstance(m, nn.Linear):
-        xavier_uniform_(m.weight.data)
-        if m.bias.data is not None:
-            zeros_(m.bias.data)   
+# def weights_init(m):
+#     if isinstance(m, nn.Conv2d):
+#         xavier_uniform_(m.weight.data)
+#         if m.bias.data is not None:
+#             zeros_(m.bias.data)
+#     if isinstance(m, nn.Linear):
+#         xavier_uniform_(m.weight.data)
+#         if m.bias.data is not None:
+#             zeros_(m.bias.data)   
 
-net.apply(weights_init)
+# net.apply(weights_init)
 
 loss = nn.BCEWithLogitsLoss()
 optimB = optim.Adam(net.parameters(),lr=lr,betas=(b1,0.999))

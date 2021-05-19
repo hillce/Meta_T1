@@ -28,8 +28,8 @@ class Base_Dataset(Dataset):
             sys.stdout.write("\r [{}/{}]".format(idx,len(tempMetaData.files)))
             if removeBadSequence:
                 tag = tempMetaData[k][1].astype(float)
-                if tag[1] != 1:
-                    self.metaData[k] = (tempMetaData[k][0].astype(float),tag)
+                tag = np.delete(tag,1)
+                self.metaData[k] = (tempMetaData[k][0].astype(float),tag)
             else:
                 self.metaData[k] = (tempMetaData[k][0].astype(float),tempMetaData[k][1].astype(float))
         
