@@ -27,6 +27,7 @@ parser.add_argument("-nE","--num_epochs",help="Number of Epochs to train for",ty
 parser.add_argument("--step_size",help="Step size for learning rate decay",type=int,default=5,dest="stepSize")
 parser.add_argument("--norm",help="Normalise the data",default=False,action='store_true',dest="normalise")
 parser.add_argument("--con","-condense",help="Whether to condense Tags to single include/exclude",default=False,action='store_true',dest="condense")
+parser.add_argument("--rm_bad_sequence",help="Type if you want to include badsequence in your tags",default=False,action="store_true",dest="rmBadSeq")
 parser.add_argument("--device",help="Device to run training on",type=str,default="cuda:0",dest="device")
 
 args = parser.parse_args()
@@ -42,6 +43,7 @@ numEpochs = args.numEpochs
 stepSize = args.stepSize
 normalise = args.normalise
 condense = args.condense
+rmBadSeq = args.rmBadSeq
 device = args.device
 
 modelDir = "./models/DCGAN_ESQ/{}/".format(modelName)
@@ -65,6 +67,8 @@ hParamDict["batchSize"] = bSize
 hParamDict["numEpochs"] = numEpochs
 hParamDict["stepSize"] = stepSize
 hParamDict["normalise"] = normalise
+hParamDict["rmBadSeq"] = rmBadSeq
+hParamDict["device"] = device
 
 with open("{}hparams.json".format(modelDir),"w") as f:
     json.dump(hParamDict,f)
@@ -86,9 +90,9 @@ else:
     trnsInTrain = transforms.Compose([toT])
     trnsInVal = transforms.Compose([toT])
 
-datasetTrain = Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=20000,transform=trnsInTrain,load=load,condense=condense)
-datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense)
-datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense)
+datasetTrain = Train_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=20000,transform=trnsInTrain,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetVal = Val_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
+datasetTest = Test_Meta_Dataset(modelDir=modelDir,fileDir=fileDir,t1MapDir=t1MapDir,size=5000,transform=trnsInVal,load=load,condense=condense,removeBadSequence=rmBadSeq)
 
 loaderTrain = DataLoader(datasetTrain,batch_size=bSize,shuffle=True,collate_fn=collate_fn,pin_memory=False)
 loaderVal = DataLoader(datasetVal,batch_size=bSize,shuffle=False,collate_fn=collate_fn,pin_memory=False)
