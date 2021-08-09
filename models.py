@@ -357,9 +357,9 @@ class AutoEncoder_W_Central_Loss(nn.Module):
 
 class DCGAN_ESG(nn.Module):
 
-    def __init__(self,inMeta=694,inImg=7,outMeta=7,outSize=12):
+    def __init__(self,inMeta=694,inImg=7,outMeta=7,outSize=12,trainMode=True):
         super(DCGAN_ESG,self).__init__()
-
+        self.trainMode = trainMode
         self.meta_arm = Meta_Arm(inMeta,outMeta)
         self.vgg_arm = vgg16_bn(pretrained=True)
 
@@ -374,7 +374,10 @@ class DCGAN_ESG(nn.Module):
         x_img = torch.cat([x_img,x_meta],dim=1)
 
         out = self.vgg_arm(x_img)
-        return out
+        if self.trainMode:
+            return out
+        else:
+            return out,x_meta
 
 class Meta_Arm(nn.Module):
 
